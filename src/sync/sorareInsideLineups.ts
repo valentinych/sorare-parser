@@ -1036,8 +1036,8 @@ export class SorareInsideSession {
   }
 
   /**
-   * Find the club or Home-vs-Away row on the expanded lineups list.
-   * Never uses the header team Select/combobox.
+   * Find the Home-vs-Away match row (plain text, not a combobox option).
+   * `find` only locates; `click` clicks the row itself — names are not buttons.
    */
   private lineupsTeamCardScript(
     teamName: string,
@@ -1049,34 +1049,31 @@ export class SorareInsideSession {
       const want = ${JSON.stringify(teamName)};
       const opponent = ${JSON.stringify(opponentName || "")};
       const skipSel =
-        "[data-combobox-dropdown], [data-combobox-option], [data-combobox-target], [role='combobox'], .mantine-Select-dropdown, .mantine-Select-root, .mantine-Combobox-dropdown, .mantine-Combobox-option, .mantine-Combobox-root, input, [data-modal-content], .mantine-Modal-content";
+        "[data-combobox-dropdown], [data-combobox-option], [data-combobox-target], [role='combobox'], .mantine-Select-dropdown, .mantine-Combobox-dropdown, .mantine-Combobox-option, input, [data-modal-content], .mantine-Modal-content";
       const accordionSel =
         "[data-accordion-control], .mantine-Accordion-control";
+      const textOf = (el) =>
+        String(el.innerText || el.textContent || "").replace(/\\s+/g, " ").trim();
       let best = null;
       let bestScore = -1;
       const nodes = document.querySelectorAll(
-        "button, a, [role='button'], p, span, h3, h4, strong, li, div, img",
+        "div, li, article, section, a, button, tr, p, span, h3, h4, strong",
       );
       for (const el of nodes) {
         if (!(el instanceof HTMLElement) || el.closest(skipSel)) continue;
-        if (el.matches(accordionSel) || el.closest(accordionSel) === el) continue;
-        const raw = (
-          el instanceof HTMLImageElement
-            ? el.getAttribute("alt") || ""
-            : el.textContent || ""
-        ).trim();
-        if (!raw || raw.length > 160) continue;
-        const line = raw.split("\\n")[0].trim();
-        if (!match(line, want) && !match(raw, want)) continue;
-        let score = 160 - Math.min(line.length, 120);
+        if (el.matches(accordionSel)) continue;
+        const t = textOf(el);
+        if (t.length < 8 || t.length > 500) continue;
+        if (!match(t, want)) continue;
+        let score = Math.max(0, 220 - t.length);
+        if (/\\bvs\\.?\\b/i.test(t)) score += 140;
+        if (opponent && match(t, opponent)) score += 40;
         const r = el.getBoundingClientRect();
-        if (r.width >= 2 && r.height >= 2) score += 30;
-        if (el.closest("[data-accordion-panel], .mantine-Accordion-panel, .mantine-Accordion-content")) {
-          score += 40;
+        if (r.width >= 4 && r.height >= 8) score += 20;
+        if (el.closest("[data-accordion-panel], .mantine-Accordion-panel, .mantine-Accordion-content, .mantine-Accordion-item")) {
+          score += 30;
         }
-        if (el.closest(accordionSel)) score -= 80;
-        if (opponent && (match(line, opponent) || match(raw, opponent))) score += 25;
-        if (/\\bvs\\.?\\b/i.test(line) || /\\bvs\\.?\\b/i.test(raw)) score += 10;
+        if (el.closest(accordionSel)) score -= 120;
         if (score > bestScore) {
           best = el;
           bestScore = score;
@@ -1084,45 +1081,60 @@ export class SorareInsideSession {
       }
       if (!best) return false;
       if (${mode === "click" ? "true" : "false"}) {
-        best.scrollIntoView({ block: "center", inline: "nearest" });
-        let p = best.parentElement;
-        while (p) {
-          const cs = getComputedStyle(p);
-          if (/(auto|scroll)/.test(cs.overflowY) && p.scrollHeight > p.clientHeight + 2) {
-            const r = best.getBoundingClientRect();
-            const pr = p.getBoundingClientRect();
-            p.scrollTop += r.top - pr.top - pr.height / 2 + r.height / 2;
-          }
-          p = p.parentElement;
-        }
         let target = best;
-        let cur = best;
-        while (cur && cur !== document.body) {
-          if (
-            cur.matches("button, a, [role='button']") &&
-            !cur.matches(accordionSel) &&
-            !cur.closest(skipSel)
-          ) {
-            target = cur;
-            break;
+        if (!/\\bvs\\.?\\b/i.test(textOf(best))) {
+          let p = best.parentElement;
+          for (let i = 0; i < 10 && p; i += 1) {
+            const pt = textOf(p);
+            if (/\\bvs\\.?\\b/i.test(pt) && pt.length <= 500 && match(pt, want)) {
+              target = p;
+              break;
+            }
+            p = p.parentElement;
           }
-          const cs = getComputedStyle(cur);
-          if (
-            cs.cursor === "pointer" &&
-            !cur.matches(accordionSel) &&
-            (cur.textContent || "").trim().length < 200
-          ) {
-            target = cur;
-          }
-          cur = cur.parentElement;
         }
-        if (target instanceof HTMLElement) target.click();
+        target.scrollIntoView({ block: "center", inline: "nearest" });
+        let scroller = target.parentElement;
+        while (scroller) {
+          const cs = getComputedStyle(scroller);
+          if (/(auto|scroll)/.test(cs.overflowY) && scroller.scrollHeight > scroller.clientHeight + 2) {
+            const r = target.getBoundingClientRect();
+            const pr = scroller.getBoundingClientRect();
+            scroller.scrollTop += r.top - pr.top - pr.height / 2 + r.height / 2;
+          }
+          scroller = scroller.parentElement;
+        }
+        target.click();
+        target.dispatchEvent(new MouseEvent("click", {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+        }));
       }
       return true;
     }`;
   }
 
-  /** Click the match/club on the expanded lineups list. Never uses team search. */
+  private teamNameClickVariants(teamName: string): string[] {
+    const raw = teamName.trim();
+    const noFc = raw.replace(/\s+(fc|afc|cf|sc)\.?$/i, "").trim();
+    const words = noFc.split(/\s+/).filter(Boolean);
+    const out: string[] = [];
+    const add = (value: string) => {
+      const t = value.trim();
+      if (t.length < 4) return;
+      if (!out.some((item) => item.toLowerCase() === t.toLowerCase())) out.push(t);
+    };
+    add(raw);
+    add(noFc);
+    if (words.length >= 2) add(words.slice(0, 2).join(" "));
+    if (words.length >= 3 && words[0] && words[1]) {
+      add(`${words[0]} ${words[1].slice(0, 4)}`.trim());
+    }
+    return out;
+  }
+
+  /** Click the match row that contains the club. Never uses team search. */
   private async clickMatchOnLineupsList(
     page: Page,
     teamName: string,
@@ -1146,11 +1158,14 @@ export class SorareInsideSession {
       );
     }
 
-    await evaluateTimed<boolean>(
-      page,
-      this.lineupsTeamCardScript(teamName, "click", options.opponentName),
-      8_000,
-    ).catch(() => false);
+    const clicked = await this.clickVisibleMatchRow(page, teamName);
+    if (!clicked) {
+      await evaluateTimed<boolean>(
+        page,
+        this.lineupsTeamCardScript(teamName, "click", options.opponentName),
+        8_000,
+      ).catch(() => false);
+    }
     await sleep(400);
     const modal = page
       .locator("[data-modal-content], .mantine-Modal-content")
@@ -1159,6 +1174,32 @@ export class SorareInsideSession {
     throw new Error(
       `Clicked "${teamName}" on the lineups list but the lineup popup did not open.`,
     );
+  }
+
+  /** Click the visible vs-row that contains the club name (plain text is fine). */
+  private async clickVisibleMatchRow(
+    page: Page,
+    teamName: string,
+  ): Promise<boolean> {
+    for (const label of this.teamNameClickVariants(teamName)) {
+      const name = page.getByText(label, { exact: false }).first();
+      if (!(await name.isVisible().catch(() => false))) continue;
+      const row = name.locator(
+        'xpath=ancestor::*[contains(translate(normalize-space(.), "VS", "vs"), " vs ")][1]',
+      );
+      const target = (await row.count().catch(() => 0)) > 0 ? row : name;
+      await target
+        .click({ timeout: 4_000, force: true })
+        .catch(async () => {
+          await target.evaluate(`(el) => {
+            if (!(el instanceof HTMLElement)) return;
+            el.click();
+            el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+          }`);
+        });
+      return true;
+    }
+    return false;
   }
 
   private leagueAccordionNeedles(league: SorareInsideLeague): string[] {

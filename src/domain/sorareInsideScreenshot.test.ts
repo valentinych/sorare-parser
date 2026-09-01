@@ -93,6 +93,37 @@ test("lineupTeamLabelsMatch accepts short / fixture labels like Preston", () => 
   assert.equal(lineupTeamLabelsMatch("Blackburn", "Preston North End FC"), false);
 });
 
+test("lineupTeamLabelsMatch accepts Championship vs-rows and West Brom truncation", () => {
+  const row = [
+    "Updated 10 minutes ago",
+    "Wed, Sep 2 – 8:45 PM",
+    "Updated 2 days ago",
+    "West Bromwich Albion FC",
+    "vs",
+    "Charlton Athletic FC",
+  ].join("\n");
+  assert.equal(lineupTeamLabelsMatch(row, "West Bromwich Albion FC"), true);
+  assert.equal(
+    lineupTeamLabelsMatch(
+      "West Bromwich Albion FC vs Charlton Athletic FC",
+      "West Bromwich Albion FC",
+    ),
+    true,
+  );
+  assert.equal(
+    lineupTeamLabelsMatch("West Bromwich Albion", "West Bromwich Albion FC"),
+    true,
+  );
+  assert.equal(lineupTeamLabelsMatch("West Brom", "West Bromwich Albion FC"), true);
+  assert.equal(
+    lineupTeamLabelsMatch(
+      "Preston North End FC vs Bristol City FC",
+      "Preston North End FC",
+    ),
+    true,
+  );
+});
+
 test("parseSorareInsideCaptureRequest + path helpers", () => {
   const req = parseSorareInsideCaptureRequest({
     gameId: "g1",

@@ -67,6 +67,8 @@ test("SorareInside capture clicks the lineups match after expanding the league",
   assert.match(clickFn, /lineupsTeamCardPresent/);
   assert.match(clickFn, /Clicking \$\{teamName\} on the lineups list/);
   assert.match(clickFn, /No clickable "\$\{teamName\}" match on the lineups list/);
+  assert.match(clickFn, /clickVisibleMatchRow/);
+  assert.match(clickFn, /getByText/);
   assert.doesNotMatch(clickFn, /getByPlaceholder/);
   assert.doesNotMatch(clickFn, /data-combobox-option/);
   assert.doesNotMatch(clickFn, /Select from/);

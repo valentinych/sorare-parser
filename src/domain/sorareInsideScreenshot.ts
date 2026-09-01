@@ -11,14 +11,18 @@ export { clubFileSlug, parseScreenshotTour };
  * does not exist in the browser). Keep this as plain JS.
  */
 export const LINEUP_TEAM_LABELS_MATCH_SOURCE = `(displayed, wanted) => {
-  const slug = (value) =>
-    value
+  const fold = (value) =>
+    String(value || "")
       .normalize("NFKD")
       .replace(/[\\u0300-\\u036f]/g, "")
-      .trim()
-      .replace(/\\s+(fc|afc|cf|sc)\\.?$/i, "")
-      .replace(/&/g, " and ")
       .toLowerCase()
+      .replace(/\\s+/g, " ")
+      .trim();
+  const stripFc = (value) =>
+    fold(value).replace(/\\s+(fc|afc|cf|sc)\\.?$/i, "").trim();
+  const slug = (value) =>
+    stripFc(value)
+      .replace(/&/g, " and ")
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
       .replace(/-{2,}/g, "-");
@@ -35,27 +39,50 @@ export const LINEUP_TEAM_LABELS_MATCH_SOURCE = `(displayed, wanted) => {
     const rest = longer.slice(shorter.length + 1).split("-");
     return rest.length > 0 && rest.every((t) => DROP[t]);
   };
-  const clubSlugMatch = (shownSlug, wantSlug) => {
-    if (!shownSlug || !wantSlug) return false;
-    if (slugsEqual(shownSlug, wantSlug)) return true;
-    if (shownSlug.includes("-vs-") || shownSlug.includes("-v-")) {
-      if (shownSlug.split(/-vs-|-v-/).some((p) => slugsEqual(p, wantSlug))) return true;
-    }
-    if (wantSlug.length < 6) return false;
-    return (
-      shownSlug.startsWith(wantSlug + "-") ||
-      shownSlug.endsWith("-" + wantSlug) ||
-      shownSlug.includes("-" + wantSlug + "-")
-    );
-  };
   const shown = String(displayed || "").trim();
-  if (!shown || shown.length > 160) return false;
+  if (!shown || shown.length > 500) return false;
   const want = String(wanted || "").trim();
   if (!want) return false;
+  const collapsed = fold(shown);
+  const wantFold = fold(want);
+  const wantNoFc = stripFc(want);
+  if (!wantNoFc) return false;
+  if (collapsed.includes(wantFold) || collapsed.includes(wantNoFc)) return true;
+  const wantWords = wantNoFc.split(" ");
+  if (wantWords.length >= 2) {
+    const two = wantWords.slice(0, 2).join(" ");
+    if (two.length >= 8 && collapsed.includes(two)) return true;
+  }
+  const shownNoFc = stripFc(collapsed);
+  if (
+    shownNoFc.length >= 8 &&
+    shownNoFc.split(" ").length >= 2 &&
+    wantNoFc.startsWith(shownNoFc)
+  ) {
+    return true;
+  }
+  const sides = collapsed.split(/\\s+vs\\.?\\s+/i);
+  for (const side of sides) {
+    const chunk = side
+      .replace(/updated\\s+\\d+\\s+[a-z]+\\s+ago/g, " ")
+      .replace(/\\b(mon|tue|wed|thu|fri|sat|sun)\\b[^]{0,40}/g, " ")
+      .trim();
+    if (chunk && slugsEqual(slug(chunk), slug(want))) return true;
+    if (chunk && fold(chunk).includes(wantNoFc)) return true;
+    if (
+      chunk &&
+      stripFc(chunk).length >= 8 &&
+      stripFc(chunk).split(" ").length >= 2 &&
+      wantNoFc.startsWith(stripFc(chunk))
+    ) {
+      return true;
+    }
+  }
   const firstLine = shown.split("\\n")[0].trim();
   const wantSlug = slug(want);
-  if (clubSlugMatch(slug(firstLine), wantSlug)) return true;
-  if (firstLine !== shown && clubSlugMatch(slug(shown), wantSlug)) return true;
+  if (slugsEqual(slug(firstLine), wantSlug) || slugsEqual(slug(collapsed), wantSlug)) {
+    return true;
+  }
   if (/(?:\\u2026|\\.\\.\\.)$/.test(firstLine)) {
     const prefix = slug(firstLine.replace(/(?:\\u2026|\\.\\.\\.)$/, "").trim());
     if (prefix.length >= 6 && wantSlug.startsWith(prefix)) return true;
