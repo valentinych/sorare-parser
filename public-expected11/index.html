@@ -1544,7 +1544,16 @@
           sorareCaptureStatus.textContent = error.message;
           return;
         }
-        sorareCaptureStatus.textContent = `Capturing ${team.teamName} → ${sorareOutputDisplay}/${round}/…`;
+        sorareCaptureStatus.textContent = `Scrolling to load ${team.teamName}…`;
+        const capturePoll = setInterval(() => {
+          request("/api/sorare/status")
+            .then((status) => {
+              if (status?.message) {
+                sorareCaptureStatus.textContent = status.message;
+              }
+            })
+            .catch(() => {});
+        }, 700);
         try {
           const result = await request("/api/sorare/capture", {
             method: "POST",
@@ -1570,6 +1579,8 @@
           if (btn) markSorareSideCaptured(btn, { probabilities: n || null });
         } catch (error) {
           sorareCaptureStatus.textContent = error.message;
+        } finally {
+          clearInterval(capturePoll);
         }
       }
 

@@ -19,6 +19,9 @@ test("Sorare parser UI keeps Matches stable after capture and exposes a folder p
   assert.ok(captureStart > 0 && captureEnd > captureStart);
   const captureFn = html.slice(captureStart, captureEnd);
   assert.match(captureFn, /markSorareSideCaptured\(btn/);
+  assert.match(captureFn, /Scrolling to load \$\{team\.teamName\}/);
+  assert.match(captureFn, /\/api\/sorare\/status/);
+  assert.doesNotMatch(captureFn, /Capturing \$\{team\.teamName\} →/);
   assert.doesNotMatch(captureFn, /renderSorareMatches/);
   assert.doesNotMatch(captureFn, /\/api\/sorare\/matches/);
 });
@@ -34,6 +37,10 @@ test("SorareInside session scrolls the lineups page before capture", async () =>
   assert.match(src, /Scrolling to load \$\{teamName\} before capture/);
   assert.match(src, /Scrolling lineup popup to the bottom to load all content/);
   assert.match(src, /Scroll did not settle after \$\{maxPasses\} passes/);
+  assert.match(src, /SI_SPINNER_SELECTOR/);
+  assert.match(src, /Timed out after 25s waiting for lineup content/);
+  assert.doesNotMatch(src, /\[role='progressbar'\]/);
+  assert.doesNotMatch(src, /Timed out after 90s/);
   const captureStart = src.indexOf("async capture(body: unknown)");
   const captureEnd = src.indexOf("function escapeRegExp");
   assert.ok(captureStart > 0 && captureEnd > captureStart);

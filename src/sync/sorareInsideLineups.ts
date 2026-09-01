@@ -47,6 +47,9 @@ const projectRoot = fileURLToPath(new URL("../../", import.meta.url));
 const chromeProfileDir = resolve(projectRoot, "data/sorare/chrome-profile");
 const defaultOutputRoot = resolve(projectRoot, SORARE_OUTPUT_RELATIVE_ROOT);
 const SORARE_LOGIN_URL = "https://sorareinside.com/auth/login";
+/** Real Mantine spinners only — RingProgress / [role=progressbar] are % rings. */
+const SI_SPINNER_SELECTOR =
+  ".mantine-Loader-root, .mantine-LoadingOverlay-root, .mantine-LoadingOverlay-overlay";
 
 export type SorareInsideSessionState =
   | "idle"
@@ -67,6 +70,26 @@ export type SorareInsideSessionStatus = {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function evaluateTimed<T>(
+  page: Page,
+  script: string,
+  timeoutMs: number,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      page.evaluate(script) as Promise<T>,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`evaluate timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 async function resetChromeSessionRestore(profileDir: string): Promise<void> {
@@ -212,6 +235,8 @@ export class SorareInsideSession {
       expected11LaunchOptions(headless, useChrome),
     );
     this.page = this.context.pages()[0] ?? (await this.context.newPage());
+    this.page.setDefaultTimeout(30_000);
+    this.page.setDefaultNavigationTimeout(60_000);
     return this.page;
   }
 
@@ -601,6 +626,7 @@ export class SorareInsideSession {
         path: filePath,
         type: "png",
         animations: "disabled",
+        timeout: 20_000,
       });
 
       const pitchShot = page.locator("[data-si-pitch]").first();
@@ -614,6 +640,7 @@ export class SorareInsideSession {
         path: greenFilePath,
         type: "png",
         animations: "disabled",
+        timeout: 20_000,
       });
 
       sectionText = ((await page
@@ -647,7 +674,7 @@ export class SorareInsideSession {
   private async ensureBenchDnpVisible(
     modal: ReturnType<Page["locator"]>,
   ): Promise<void> {
-    const deadline = Date.now() + 45_000;
+    const deadline = Date.now() + 15_000;
     let pass = 0;
     while (Date.now() < deadline) {
       const bench = await modal.getByText(/Bench Players/i).count().catch(() => 0);
@@ -667,7 +694,7 @@ export class SorareInsideSession {
     this.setStatus({
       state: "running",
       message:
-        "Scroll did not reveal Bench + DNP after 45s. Capturing currently loaded popup content.",
+        "Scroll did not reveal Bench + DNP after 15s. Capturing currently loaded popup content.",
       currentUrl: this.page?.url() ?? null,
     });
   }
@@ -722,7 +749,14 @@ export class SorareInsideSession {
         add(scope);
       }
       const searchRoot = scope instanceof Document ? document : scope;
+      for (const el of searchRoot.querySelectorAll(
+        ".mantine-ScrollArea-viewport, .mantine-Modal-body, [data-radix-scroll-area-viewport]",
+      )) {
+        add(el);
+      }
+      let scanned = 0;
       for (const el of searchRoot.querySelectorAll("*")) {
+        if (++scanned > 200) break;
         if (!(el instanceof HTMLElement)) continue;
         const cs = getComputedStyle(el);
         if (
@@ -775,10 +809,10 @@ export class SorareInsideSession {
           return true;
         }
       }
-      const result = (await page.evaluate(stepScript)) as {
+      const result = await evaluateTimed<{
         height: number;
         remaining: number;
-      };
+      }>(page, stepScript, 8_000);
       await sleep(350);
       const height = result?.height ?? 0;
       const remaining = result?.remaining ?? 0;
@@ -838,7 +872,8 @@ export class SorareInsideSession {
     options: { reset?: boolean } = {},
   ): Promise<void> {
     const reset = options.reset !== false;
-    await modal.evaluate(`(root) => {
+    await Promise.race([
+      modal.evaluate(`(root) => {
       const scrollers = [];
       const consider = (el) => {
         if (!(el instanceof HTMLElement)) return;
@@ -857,7 +892,11 @@ export class SorareInsideSession {
         const step = Math.max(120, Math.floor(el.clientHeight * 0.7));
         el.scrollTop = Math.min(max, el.scrollTop + step);
       }
-    }`);
+    }`),
+      sleep(8_000).then(() => {
+        throw new Error("modal scroll evaluate timed out after 8000ms");
+      }),
+    ]);
     await sleep(450);
     if (reset) {
       await modal.evaluate(`(root) => {
@@ -875,9 +914,7 @@ export class SorareInsideSession {
     modal: ReturnType<Page["locator"]>,
     timeoutMs: number,
   ): Promise<void> {
-    const loader = modal.locator(
-      ".mantine-Loader-root, .mantine-LoadingOverlay-root, [class*='mantine-Loader'], [role='progressbar']",
-    );
+    const loader = modal.locator(SI_SPINNER_SELECTOR);
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       const visible = await loader
@@ -907,57 +944,41 @@ export class SorareInsideSession {
 
     this.setStatus({
       state: "running",
-      message: "Waiting for lineup popup (auto-scrolling to load % labels)…",
+      message: "Scrolling lineup popup to load % labels…",
       currentUrl: page.url(),
     });
 
     await this.scrollToLoadLazyContent(page, {
       message: "Scrolling lineup popup to the bottom to load all content…",
       rootSelector: "[data-modal-content], .mantine-Modal-content",
+      maxPasses: 16,
     });
 
     const percentLabels = modal.getByText(/\d{1,3}\s*%/);
-    const deadline = Date.now() + 90_000;
-
+    const deadline = Date.now() + 25_000;
     let pass = 0;
     while (Date.now() < deadline) {
-      await this.waitForModalLoadersGone(modal, Math.min(5_000, deadline - Date.now()));
-      // Keep scrolling during the wait — % labels often mount only after the
-      // popup body is scrolled (otherwise we idle for up to 90s).
-      await this.scrollModalContent(modal, { reset: pass % 2 === 1 });
-      pass += 1;
       const percentCount = await percentLabels.count().catch(() => 0);
-      const hasLineupContent = percentCount >= 3;
-
-      if (hasLineupContent) {
-        await sleep(600);
-        const stillReady =
-          (await percentLabels.count().catch(() => 0)) >= 3;
-        const stillLoading = await modal
-          .locator(
-            ".mantine-Loader-root, .mantine-LoadingOverlay-root, [class*='mantine-Loader'], [role='progressbar']",
-          )
-          .first()
-          .isVisible()
-          .catch(() => false);
-        if (!stillLoading && stillReady) return;
+      // % rings use role=progressbar — do not treat them as a blocking spinner.
+      if (percentCount >= 3) {
+        await sleep(300);
+        if ((await percentLabels.count().catch(() => 0)) >= 3) return;
       }
-
-      await sleep(250);
+      await this.scrollModalContent(modal, { reset: pass % 3 === 2 });
+      pass += 1;
+      await sleep(280);
     }
 
     const stillLoading = await modal
-      .locator(
-        ".mantine-Loader-root, .mantine-LoadingOverlay-root, [class*='mantine-Loader'], [role='progressbar']",
-      )
+      .locator(SI_SPINNER_SELECTOR)
       .first()
       .isVisible()
       .catch(() => false);
     const percentCount = await percentLabels.count().catch(() => 0);
     throw new Error(
       stillLoading
-        ? "Timed out after 90s: lineup popup still shows loading spinner."
-        : `Timed out after 90s waiting for lineup content in popup (found ${percentCount} probability label(s); need ≥3).`,
+        ? `Timed out after 25s: lineup popup still shows a spinner (found ${percentCount} % label(s)).`
+        : `Timed out after 25s waiting for lineup content in popup (found ${percentCount} probability label(s); need ≥3).`,
     );
   }
 
