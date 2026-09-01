@@ -657,7 +657,8 @@
             Paste a gameweek lineups URL, load leagues, check the ones you want,
             set a round/tour next to each, then expand. Click a team side on a
             match to open the SorareInside popup, parse %, and screenshot the
-            entire modal. Sign in in the Chrome window if prompted, then
+            entire modal — or use <strong>Скачать оставшиеся</strong> to queue
+            every Home/Away that is not yet on disk. Sign in in the Chrome window if prompted, then
             <strong>Login complete — continue</strong>.
           </div>
         </form>
@@ -681,7 +682,12 @@
         </section>
 
         <section class="card" id="sorare-matches-card" hidden>
-          <h2>Matches</h2>
+          <div class="status-heading">
+            <h2>Matches</h2>
+            <button id="sorare-capture-remaining" type="button" title="Capture remaining">
+              Скачать оставшиеся
+            </button>
+          </div>
           <p class="muted" id="sorare-matches-hint"></p>
           <div class="match-list" id="sorare-matches"></div>
           <div class="controls" style="margin-top:14px">
@@ -1258,6 +1264,7 @@
       const sorareMatchesCard = document.querySelector("#sorare-matches-card");
       const sorareMatches = document.querySelector("#sorare-matches");
       const sorareMatchesHint = document.querySelector("#sorare-matches-hint");
+      const sorareCaptureRemaining = document.querySelector("#sorare-capture-remaining");
       const sorareCaptureStatus = document.querySelector("#sorare-capture-status");
       const sorarePublish = document.querySelector("#sorare-publish");
       const sorarePublishHint = document.querySelector("#sorare-publish-hint");
@@ -1272,6 +1279,8 @@
       let sorareCapturedTotal = 0;
       let sorareOutputDisplay = "data/sorare/output";
       let lastPostedOutputDir = "";
+      let lastSorareMatches = [];
+      let sorareCaptureBusy = false;
 
       function mantraSlugFromSorareLabel(label) {
         const l = String(label || "").toLowerCase();
@@ -1405,6 +1414,7 @@
       }
 
       async function renderSorareMatches(matches, leaguesMeta) {
+        lastSorareMatches = matches || [];
         sorareMatches.replaceChildren();
         if (!matches?.length) {
           sorareMatchesCard.hidden = true;
@@ -1524,8 +1534,10 @@
           roundHint;
       }
 
-      async function captureSorareSide(match, side, btn) {
+      async function captureSorareSide(match, side, btn, progress) {
         const team = side === "home" ? match.home : match.away;
+        const prefix = progress ? `${progress} ` : "";
+        if (sorareCaptureBusy && !progress) return false;
         const round =
           sorareRoundByLeague.get(match.leagueId) ||
           Number(
@@ -1535,21 +1547,26 @@
           );
         if (!Number.isInteger(round) || round < 1) {
           sorareCaptureStatus.textContent =
-            "Set a valid round (1–99) next to the league first.";
-          return;
+            prefix + "Set a valid round (1–99) next to the league first.";
+          return false;
         }
         try {
           await persistSorareOutputDir();
         } catch (error) {
-          sorareCaptureStatus.textContent = error.message;
-          return;
+          sorareCaptureStatus.textContent = prefix + error.message;
+          return false;
         }
-        sorareCaptureStatus.textContent = `Expanding league to click ${team.teamName}…`;
+        const ownBusy = !progress;
+        if (ownBusy) {
+          sorareCaptureBusy = true;
+          sorareCaptureRemaining.disabled = true;
+        }
+        sorareCaptureStatus.textContent = `${prefix}Expanding league to click ${team.teamName}…`;
         const capturePoll = setInterval(() => {
           request("/api/sorare/status")
             .then((status) => {
               if (status?.message) {
-                sorareCaptureStatus.textContent = status.message;
+                sorareCaptureStatus.textContent = prefix + status.message;
               }
             })
             .catch(() => {});
@@ -1572,15 +1589,74 @@
           const folder = result.outputRoot || sorareOutputDisplay;
           if (result.outputRoot || result.outputRootAbs) applySorareOutputDir(result);
           sorareCaptureStatus.textContent =
-            `Saved ${folder}/${file}` +
+            `${prefix}Saved ${folder}/${file}` +
             (green ? ` + ${green}` : "") +
             (n ? ` · ${n} player probabilities in sidecar JSON` : "") +
             ` · local only until «Залить JSON на прод»`;
           if (btn) markSorareSideCaptured(btn, { probabilities: n || null });
+          return true;
         } catch (error) {
-          sorareCaptureStatus.textContent = error.message;
+          sorareCaptureStatus.textContent = prefix + error.message;
+          return false;
         } finally {
           clearInterval(capturePoll);
+          if (ownBusy) {
+            sorareCaptureBusy = false;
+            sorareCaptureRemaining.disabled = false;
+          }
+        }
+      }
+
+      function collectRemainingSorareSides() {
+        const remaining = [];
+        const rows = sorareMatches.querySelectorAll(".match-row");
+        for (let i = 0; i < lastSorareMatches.length; i++) {
+          const match = lastSorareMatches[i];
+          const row = rows[i];
+          if (!row) continue;
+          for (const side of ["home", "away"]) {
+            const team = match[side];
+            if (!team?.lineupId) continue;
+            const btn = row.querySelector(`button.side[data-side="${side}"]`);
+            if (!btn || btn.dataset.saved === "1") continue;
+            remaining.push({ match, side, btn, teamName: team.teamName });
+          }
+        }
+        return remaining;
+      }
+
+      async function captureRemainingSorareSides() {
+        if (sorareCaptureBusy) return;
+        const remaining = collectRemainingSorareSides();
+        if (!remaining.length) {
+          sorareCaptureStatus.textContent =
+            "Nothing left — every listed Home/Away already has a screenshot.";
+          return;
+        }
+        sorareCaptureBusy = true;
+        sorareCaptureRemaining.disabled = true;
+        const total = remaining.length;
+        let ok = 0;
+        let failed = 0;
+        try {
+          for (let i = 0; i < remaining.length; i++) {
+            const item = remaining[i];
+            const saved = await captureSorareSide(
+              item.match,
+              item.side,
+              item.btn,
+              `${i + 1}/${total}`,
+            );
+            if (saved) ok += 1;
+            else failed += 1;
+          }
+          sorareCaptureStatus.textContent =
+            failed === 0
+              ? `Captured remaining ${ok}/${total}.`
+              : `Captured remaining ${ok}/${total} · ${failed} failed.`;
+        } finally {
+          sorareCaptureBusy = false;
+          sorareCaptureRemaining.disabled = false;
         }
       }
 
@@ -1603,6 +1679,9 @@
           const busy =
             status.state === "running" || status.state === "waiting-login";
           sorareDiscover.disabled = busy;
+          if (!sorareCaptureBusy) {
+            sorareCaptureRemaining.disabled = busy;
+          }
           if (
             status.state === "ready" &&
             status.leagueCount > 0 &&
@@ -1660,6 +1739,10 @@
         } catch (error) {
           sorareCaptureStatus.textContent = error.message;
         }
+      });
+
+      sorareCaptureRemaining.addEventListener("click", () => {
+        captureRemainingSorareSides();
       });
 
       sorareContinue.addEventListener("click", async () => {

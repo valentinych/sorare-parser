@@ -525,6 +525,57 @@ export function listSorareCapturedClubs(
   );
 }
 
+export type RemainingSorareCaptureSide = {
+  gameId: string;
+  side: "home" | "away";
+  teamName: string;
+  lineupId: string;
+  round: number;
+};
+
+/** png or json in the tour folder counts as collected (green-only does not). */
+export function isSorareSideCapturedOnDisk(info: {
+  json?: boolean;
+  png?: boolean;
+} | undefined): boolean {
+  return Boolean(info?.json || info?.png);
+}
+
+/**
+ * Home/Away sides that still need a capture. Skips missing lineups and clubs
+ * that already have `{round}/{club}.png` or `.json`.
+ */
+export function remainingSorareCaptureSides(
+  matches: SorareInsideMatch[],
+  roundByLeagueId: ReadonlyMap<string, number>,
+  capturedByRound: ReadonlyMap<
+    number,
+    Readonly<Record<string, { json?: boolean; png?: boolean }>>
+  >,
+): RemainingSorareCaptureSide[] {
+  const remaining: RemainingSorareCaptureSide[] = [];
+  for (const match of matches) {
+    const round = roundByLeagueId.get(match.leagueId);
+    if (!Number.isInteger(round) || (round as number) < 1) continue;
+    const bySlug = capturedByRound.get(round as number) || {};
+    for (const side of ["home", "away"] as const) {
+      const team = match[side];
+      if (!team.lineupId) continue;
+      if (isSorareSideCapturedOnDisk(bySlug[clubFileSlug(team.teamName)])) {
+        continue;
+      }
+      remaining.push({
+        gameId: match.gameId,
+        side,
+        teamName: team.teamName,
+        lineupId: team.lineupId,
+        round: round as number,
+      });
+    }
+  }
+  return remaining;
+}
+
 export function isSorareInsideGamesApiUrl(url: string): boolean {
   try {
     const parsed = new URL(url);

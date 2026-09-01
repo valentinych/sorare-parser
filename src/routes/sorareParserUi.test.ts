@@ -15,7 +15,7 @@ test("Sorare parser UI keeps Matches stable after capture and exposes a folder p
   assert.match(html, /\/api\/sorare\/pick-folder/);
   assert.match(html, /\/api\/sorare\/output-dir/);
   const captureStart = html.indexOf("async function captureSorareSide");
-  const captureEnd = html.indexOf("async function refreshSorareStatus");
+  const captureEnd = html.indexOf("async function captureRemainingSorareSides");
   assert.ok(captureStart > 0 && captureEnd > captureStart);
   const captureFn = html.slice(captureStart, captureEnd);
   assert.match(captureFn, /markSorareSideCaptured\(btn/);
@@ -24,6 +24,25 @@ test("Sorare parser UI keeps Matches stable after capture and exposes a folder p
   assert.doesNotMatch(captureFn, /Capturing \$\{team\.teamName\} →/);
   assert.doesNotMatch(captureFn, /renderSorareMatches/);
   assert.doesNotMatch(captureFn, /\/api\/sorare\/matches/);
+});
+
+test("Sorare parser UI queues remaining missing sides without rebuilding Matches", async () => {
+  const html = await readFile(
+    new URL("../../public-expected11/index.html", import.meta.url),
+    "utf8",
+  );
+  assert.match(html, /id="sorare-capture-remaining"/);
+  assert.match(html, /Скачать оставшиеся/);
+  const start = html.indexOf("function collectRemainingSorareSides");
+  const end = html.indexOf("async function refreshSorareStatus");
+  assert.ok(start > 0 && end > start);
+  const fn = html.slice(start, end);
+  assert.match(fn, /dataset\.saved === "1"/);
+  assert.match(fn, /\$\{i \+ 1\}\/\$\{total\}/);
+  assert.match(fn, /captureSorareSide\(/);
+  assert.match(fn, /sorareCaptureRemaining\.disabled = true/);
+  assert.doesNotMatch(fn, /renderSorareMatches/);
+  assert.doesNotMatch(fn, /\/api\/sorare\/matches/);
 });
 
 test("SorareInside session scrolls the lineups page before capture", async () => {

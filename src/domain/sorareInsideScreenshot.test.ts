@@ -11,6 +11,7 @@ import {
   leagueLabel,
   listSorareCapturedClubs,
   mergeSorareInsideProbabilities,
+  remainingSorareCaptureSides,
   parseBenchAndDnpPlayerLists,
   parseProbabilitiesFromModalText,
   parseSorareInsideCaptureRequest,
@@ -299,6 +300,49 @@ test("listSorareCapturedClubs reads png/json from tour folder", () => {
     capturedAt: "2026-08-28T12:00:00.000Z",
   });
   assert.deepEqual(listSorareCapturedClubs(root, 9), []);
+});
+
+test("remainingSorareCaptureSides skips clubs that already have png or json", () => {
+  const root = mkdtempSync(join(tmpdir(), "sorare-remain-"));
+  const tourDir = join(root, "3");
+  mkdirSync(tourDir, { recursive: true });
+  writeFileSync(join(tourDir, "millwall.png"), "x");
+  writeFileSync(join(tourDir, "millwall.json"), "{}");
+  writeFileSync(join(tourDir, "only-green-green.png"), "x");
+  const clubs = listSorareCapturedClubs(root, 3);
+  const bySlug = Object.fromEntries(clubs.map((c) => [c.clubSlug, c]));
+  const side = (teamName: string, lineupId: string | null) => ({
+    teamName,
+    teamSlug: null,
+    lineupId,
+    pictureUrl: null,
+  });
+  const remaining = remainingSorareCaptureSides(
+    [
+      {
+        gameId: "g1",
+        leagueId: "champ",
+        leagueLabel: "Championship",
+        date: null,
+        home: side("Millwall FC", "h1"),
+        away: side("West Bromwich Albion", "a1"),
+      },
+      {
+        gameId: "g2",
+        leagueId: "champ",
+        leagueLabel: "Championship",
+        date: null,
+        home: side("TBD", null),
+        away: side("Only Green", "a2"),
+      },
+    ],
+    new Map([["champ", 3]]),
+    new Map([[3, bySlug]]),
+  );
+  assert.deepEqual(
+    remaining.map((r) => `${r.side}:${clubFileSlug(r.teamName)}`),
+    ["away:west-bromwich-albion", "away:only-green"],
+  );
 });
 
 test("mergeSorareInsideProbabilities prefers pitch names over bench/dnp", () => {
