@@ -30,4 +30,15 @@ test("SorareInside session scrolls the lineups page before capture", async () =>
   );
   assert.match(src, /scrollLineupsPageToLoadAll/);
   assert.match(src, /Scrolling lineups to the bottom to load all matches/);
+  assert.match(src, /scrollToLoadLazyContent/);
+  assert.match(src, /Scrolling to load \$\{teamName\} before capture/);
+  assert.match(src, /Scrolling lineup popup to the bottom to load all content/);
+  assert.match(src, /Scroll did not settle after \$\{maxPasses\} passes/);
+  const captureStart = src.indexOf("async capture(body: unknown)");
+  const captureEnd = src.indexOf("function escapeRegExp");
+  assert.ok(captureStart > 0 && captureEnd > captureStart);
+  const captureFn = src.slice(captureStart, captureEnd);
+  assert.match(captureFn, /expandLeagueAccordion/);
+  assert.match(captureFn, /scrollToLoadLazyContent/);
+  assert.match(captureFn, /untilText: teamName/);
 });

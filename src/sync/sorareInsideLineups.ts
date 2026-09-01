@@ -480,10 +480,16 @@ export class SorareInsideSession {
       currentUrl: page.url(),
     });
 
-    await this.scrollModalContent(modal, { reset: false });
+    await this.scrollToLoadLazyContent(page, {
+      message: "Scrolling popup to the bottom to load Bench / DNP / %…",
+      rootSelector: "[data-modal-content], .mantine-Modal-content",
+    });
     await this.waitForModalLoadersGone(modal, 20_000);
     await this.ensureBenchDnpVisible(modal);
-    await this.scrollModalContent(modal, { reset: false });
+    await this.scrollToLoadLazyContent(page, {
+      message: "Re-scrolling popup after Bench / DNP mounted…",
+      rootSelector: "[data-modal-content], .mantine-Modal-content",
+    });
     await this.waitForModalLoadersGone(modal, 20_000);
     await modal.evaluate(`(root) => {
       for (const el of window.__siModalScrollers || []) {
@@ -658,6 +664,159 @@ export class SorareInsideSession {
       pass += 1;
       await sleep(350);
     }
+    this.setStatus({
+      state: "running",
+      message:
+        "Scroll did not reveal Bench + DNP after 45s. Capturing currently loaded popup content.",
+      currentUrl: this.page?.url() ?? null,
+    });
+  }
+
+  /**
+   * Step-scroll window + overflow panes (or a modal root) so infinite-scroll
+   * content mounts. Stops when height is stable AND panes are at the bottom,
+   * or when `untilText` is visible. Finite: warns via status if it never settles.
+   */
+  private async scrollToLoadLazyContent(
+    page: Page,
+    options: {
+      message: string;
+      rootSelector?: string;
+      untilText?: string;
+      maxPasses?: number;
+    },
+  ): Promise<boolean> {
+    const maxPasses = options.maxPasses ?? 40;
+    const rootSelector = options.rootSelector ?? "";
+    this.setStatus({
+      state: "running",
+      message: options.message,
+      currentUrl: page.url(),
+    });
+
+    const untilLocator = options.untilText
+      ? page
+          .locator("button, a, [role='button'], p, span")
+          .filter({
+            hasText: new RegExp(`^${escapeRegExp(options.untilText)}$`),
+          })
+          .first()
+      : null;
+
+    const stepScript = `() => {
+      const rootSel = ${JSON.stringify(rootSelector)};
+      const scope = rootSel ? document.querySelector(rootSel) : document;
+      if (!scope) return { height: 0, remaining: 0 };
+      const nodes = [];
+      const seen = new Set();
+      const add = (el) => {
+        if (!(el instanceof HTMLElement) || seen.has(el)) return;
+        seen.add(el);
+        nodes.push(el);
+      };
+      if (scope instanceof Document) {
+        add(document.scrollingElement);
+        add(document.documentElement);
+        add(document.body);
+      } else {
+        add(scope);
+      }
+      const searchRoot = scope instanceof Document ? document : scope;
+      for (const el of searchRoot.querySelectorAll("*")) {
+        if (!(el instanceof HTMLElement)) continue;
+        const cs = getComputedStyle(el);
+        if (
+          /(auto|scroll)/.test(cs.overflowY) &&
+          el.scrollHeight > el.clientHeight + 8
+        ) {
+          add(el);
+        }
+      }
+      let maxHeight = 0;
+      let remaining = 0;
+      for (const el of nodes) {
+        const max = Math.max(0, el.scrollHeight - el.clientHeight);
+        const step = Math.max(180, Math.floor(el.clientHeight * 0.85) || 180);
+        el.scrollTop = Math.min(max, el.scrollTop + step);
+        maxHeight = Math.max(maxHeight, el.scrollHeight);
+        remaining = Math.max(remaining, max - el.scrollTop);
+      }
+      if (scope instanceof Document) {
+        window.scrollBy(0, Math.max(window.innerHeight * 0.85, 400));
+        remaining = Math.max(
+          remaining,
+          Math.max(
+            document.documentElement.scrollHeight,
+            document.body.scrollHeight,
+          ) - (window.scrollY + window.innerHeight),
+        );
+      }
+      return {
+        height: Math.max(
+          maxHeight,
+          document.documentElement.scrollHeight,
+          document.body.scrollHeight,
+        ),
+        remaining,
+      };
+    }`;
+
+    let lastHeight = 0;
+    let stable = 0;
+    for (let pass = 0; pass < maxPasses; pass += 1) {
+      if (untilLocator) {
+        const visible = await untilLocator.isVisible().catch(() => false);
+        if (visible) {
+          this.setStatus({
+            state: "running",
+            message: `Found ${options.untilText} after scrolling.`,
+            currentUrl: page.url(),
+          });
+          return true;
+        }
+      }
+      const result = (await page.evaluate(stepScript)) as {
+        height: number;
+        remaining: number;
+      };
+      await sleep(350);
+      const height = result?.height ?? 0;
+      const remaining = result?.remaining ?? 0;
+      const atBottom = remaining <= 8;
+      if (height <= lastHeight && atBottom) {
+        stable += 1;
+        if (stable >= 2 && pass >= 2) {
+          if (untilLocator) {
+            const visible = await untilLocator.isVisible().catch(() => false);
+            if (visible) return true;
+            const warn =
+              `Scroll settled but "${options.untilText}" is not visible. Continuing anyway.`;
+            console.warn(`[sorare-inside] ${warn}`);
+            this.setStatus({
+              state: "running",
+              message: warn,
+              currentUrl: page.url(),
+            });
+            return false;
+          }
+          return true;
+        }
+      } else {
+        stable = 0;
+        lastHeight = Math.max(lastHeight, height);
+      }
+    }
+
+    const warn = options.untilText
+      ? `Scroll did not settle after ${maxPasses} passes (height=${lastHeight}); "${options.untilText}" not visible. Continuing anyway.`
+      : `Scroll did not settle after ${maxPasses} passes (height=${lastHeight}). Continuing anyway.`;
+    console.warn(`[sorare-inside] ${warn}`);
+    this.setStatus({
+      state: "running",
+      message: warn,
+      currentUrl: page.url(),
+    });
+    return false;
   }
 
   /**
@@ -665,55 +824,9 @@ export class SorareInsideSession {
    * mount before screenshot capture starts.
    */
   private async scrollLineupsPageToLoadAll(page: Page): Promise<void> {
-    this.setStatus({
-      state: "running",
+    await this.scrollToLoadLazyContent(page, {
       message: "Scrolling lineups to the bottom to load all matches…",
-      currentUrl: page.url(),
     });
-    let lastHeight = 0;
-    let stable = 0;
-    for (let pass = 0; pass < 40; pass += 1) {
-      const height = (await page.evaluate(`() => {
-        const nodes = [];
-        const add = (el) => {
-          if (el instanceof HTMLElement) nodes.push(el);
-        };
-        add(document.scrollingElement);
-        add(document.documentElement);
-        add(document.body);
-        for (const el of document.querySelectorAll("*")) {
-          if (!(el instanceof HTMLElement)) continue;
-          const cs = getComputedStyle(el);
-          if (
-            /(auto|scroll)/.test(cs.overflowY) &&
-            el.scrollHeight > el.clientHeight + 8
-          ) {
-            nodes.push(el);
-          }
-        }
-        let maxHeight = 0;
-        for (const el of nodes) {
-          const max = Math.max(0, el.scrollHeight - el.clientHeight);
-          const step = Math.max(180, Math.floor(el.clientHeight * 0.85) || 180);
-          el.scrollTop = Math.min(max, el.scrollTop + step);
-          maxHeight = Math.max(maxHeight, el.scrollHeight);
-        }
-        window.scrollBy(0, Math.max(window.innerHeight * 0.85, 400));
-        return Math.max(
-          maxHeight,
-          document.documentElement.scrollHeight,
-          document.body.scrollHeight,
-        );
-      }`)) as number;
-      await sleep(350);
-      if (height <= lastHeight) {
-        stable += 1;
-        if (stable >= 2 && pass >= 2) break;
-      } else {
-        stable = 0;
-        lastHeight = height;
-      }
-    }
   }
 
   /**
@@ -742,10 +855,7 @@ export class SorareInsideSession {
         const max = Math.max(0, el.scrollHeight - el.clientHeight);
         if (max <= 0) continue;
         const step = Math.max(120, Math.floor(el.clientHeight * 0.7));
-        for (let y = 0; y <= max; y += step) {
-          el.scrollTop = Math.min(y, max);
-        }
-        el.scrollTop = max;
+        el.scrollTop = Math.min(max, el.scrollTop + step);
       }
     }`);
     await sleep(450);
@@ -799,6 +909,11 @@ export class SorareInsideSession {
       state: "running",
       message: "Waiting for lineup popup (auto-scrolling to load % labels)…",
       currentUrl: page.url(),
+    });
+
+    await this.scrollToLoadLazyContent(page, {
+      message: "Scrolling lineup popup to the bottom to load all content…",
+      rootSelector: "[data-modal-content], .mantine-Modal-content",
     });
 
     const percentLabels = modal.getByText(/\d{1,3}\s*%/);
@@ -1029,6 +1144,14 @@ export class SorareInsideSession {
 
       const league = this.leagues.find((item) => item.id === match.leagueId);
       if (league) await this.expandLeagueAccordion(page, league);
+
+      // Discover may already have scrolled league headers; after expand, the
+      // club's match row is still lazy. Always step-scroll until the team
+      // name mounts (or height settles) before opening the lineup popup.
+      await this.scrollToLoadLazyContent(page, {
+        message: `Scrolling to load ${teamName} before capture…`,
+        untilText: teamName,
+      });
 
       await this.openLineupPopup(page, match, request.side);
 
