@@ -1,0 +1,1263 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mantra Helper · Panenka</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css?v=133" />
+    <script>
+      (function () {
+        var map = {
+          clubs: "/clubs",
+          players: "/players",
+          matches: "/matches",
+          live: "/live",
+          auctions: "/auctions",
+          xi: "/xi",
+          sorare: "/sorare",
+          mapping: "/mapping",
+          premium: "/premium",
+          "league-one": "/league-one",
+          builder: "/builder",
+          ref: "/ref",
+          "live-draft": "/live-draft",
+          draft: "/live-draft",
+        };
+        var raw = (location.hash || "").replace(/^#/, "");
+        if (!raw) return;
+        var qIdx = raw.indexOf("?");
+        var view = (qIdx >= 0 ? raw.slice(0, qIdx) : raw).trim();
+        var path = map[view];
+        if (!path) return;
+        var qs = qIdx >= 0 ? raw.slice(qIdx) : "";
+        location.replace(path + qs);
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="glow" aria-hidden="true"></div>
+    <header class="top">
+      <div class="brand-block">
+        <p class="brand">Mantra Helper</p>
+        <p class="tagline">panenka.games · составы и рейтинги</p>
+        <label class="comp-pick">
+          Чемпионат
+          <select id="competition-select"></select>
+        </label>
+      </div>
+      <div class="top-right">
+        <div class="account-bar">
+          <a class="account-login" id="account-login" href="/auth/google">Войти через Google</a>
+          <button type="button" class="account-button" id="account-button" hidden>
+            <img id="account-avatar" alt="" width="28" height="28" />
+            <span id="account-name">Профиль</span>
+          </button>
+        </div>
+        <div class="support-links">
+          <a
+            class="support-link support-bmc"
+            href="https://buymeacoffee.com/valentinych"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Поддержать Mantra Helper</a
+          >
+          <a
+            class="support-link support-patreon"
+            href="https://www.patreon.com/mantrafootball"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Підтримати MantraFootball</a
+          >
+        </div>
+        <nav class="tabs" role="tablist">
+          <a class="tab" data-view="live" href="/live" aria-selected="false">Live</a>
+          <a class="tab" data-view="auctions" href="/auctions" aria-selected="false">Аукционы</a>
+          <a class="tab" data-view="xi" href="/xi" aria-selected="false">Предикты XI</a>
+          <a class="tab" data-view="sorare" href="/sorare" aria-selected="false">Фейк Мопс</a>
+          <a class="tab" data-view="mapping" href="/mapping" aria-selected="false" hidden>Mapping</a>
+          <a class="tab" data-view="premium" href="/premium" aria-selected="false" hidden>Premium</a>
+          <a class="tab" data-view="league-one" href="/league-one" aria-selected="false" hidden>League One</a>
+          <a class="tab" data-view="live-draft" href="/live-draft" aria-selected="false" hidden>Живой аукцион АПЛ</a>
+          <a class="tab" data-view="builder" href="/builder" aria-selected="false">Squad Builder</a>
+        </nav>
+      </div>
+    </header>
+
+<!--spa-block:league-->
+    <section class="league" id="league">
+      <div class="league-main">
+        <img id="league-logo" alt="" width="72" height="72" />
+        <div>
+          <h1 id="league-name">—</h1>
+          <p class="meta" id="league-meta"></p>
+        </div>
+      </div>
+      <dl class="league-stats" id="league-stats"></dl>
+      <div class="sync-progress" id="sync-progress" hidden>
+        <div class="sync-progress-head">
+          <span id="sync-progress-label">Sync</span>
+          <span id="sync-progress-pct">0%</span>
+        </div>
+        <div class="sync-progress-bar" aria-hidden="true">
+          <div class="sync-progress-fill" id="sync-progress-fill"></div>
+        </div>
+        <p class="sync-progress-detail" id="sync-progress-detail"></p>
+        <button type="button" class="sync-restart" id="sync-restart" hidden>
+          Перезапустить sync:expand
+        </button>
+      </div>
+    </section>
+<!--/spa-block:league-->
+
+    <main>
+      
+<!--spa-view:clubs-->
+<section id="view-clubs" class="view" data-active="true">
+        <div class="toolbar">
+          <label>
+            Сортировка
+            <select id="club-sort">
+              <option value="value-desc">Стоимость ↓</option>
+              <option value="value-asc">Стоимость ↑</option>
+              <option value="age-asc">Возраст ↑</option>
+              <option value="squad-desc">Состав ↓</option>
+              <option value="name">Имя</option>
+            </select>
+          </label>
+          <p class="meta" id="clubs-meta"></p>
+        </div>
+        <div class="club-grid" id="club-grid"></div>
+      </section>
+<!--/spa-view:clubs-->
+
+      
+
+<!--spa-view:players-->
+<section id="view-players" class="view" hidden>
+        <div class="toolbar wrap">
+          <label>
+            Клуб
+            <select id="player-club"><option value="">Все</option></select>
+          </label>
+          <label>
+            Позиция
+            <select id="player-pos">
+              <option value="">Все</option>
+              <option value="GK">GK</option>
+              <option value="DEF">DEF</option>
+              <option value="MID">MID</option>
+              <option value="ATT">ATT</option>
+            </select>
+          </label>
+          <label>
+            Турниры
+            <select id="player-comp-filter">
+              <option value="all">Все (сумма)</option>
+              <option value="domestic">Домашняя лига</option>
+              <option value="europe">Еврокубки</option>
+            </select>
+          </label>
+          <label class="grow">
+            Поиск
+            <input id="player-q" type="search" placeholder="Имя игрока…" />
+          </label>
+          <div class="col-picker" id="player-col-picker">
+            <button type="button" class="col-picker-btn" id="player-cols-btn" aria-expanded="false">
+              Колонки
+            </button>
+            <div class="col-picker-menu" id="player-cols-menu" hidden></div>
+          </div>
+          <button type="button" class="col-picker-btn" id="players-export-csv">
+            Export all data to CSV
+          </button>
+          <p class="meta" id="players-meta"></p>
+        </div>
+        <details class="col-filters-panel" id="player-col-filters-panel" hidden>
+          <summary class="col-filters-summary">Фильтры колонок</summary>
+          <div class="col-filters-body" id="player-col-filters"></div>
+        </details>
+        <div class="table-wrap">
+          <table class="data-table players-table" id="players-table">
+            <thead>
+              <tr id="players-head"></tr>
+            </thead>
+            <tbody id="players-body"></tbody>
+          </table>
+        </div>
+      </section>
+<!--/spa-view:players-->
+
+      
+
+<!--spa-view:matches-->
+<section id="view-matches" class="view" hidden>
+        <div class="toolbar wrap">
+          <label>
+            Клуб
+            <select id="match-club"><option value="">Все</option></select>
+          </label>
+          <label>
+            Турнир
+            <select id="match-comp"><option value="">Все</option></select>
+          </label>
+          <label>
+            Статус
+            <select id="match-status">
+              <option value="">Все</option>
+              <option value="finished">Сыгранные</option>
+              <option value="upcoming">Предстоящие</option>
+            </select>
+          </label>
+          <p class="meta" id="matches-meta"></p>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Дата</th>
+                <th>Тур</th>
+                <th>Турнир</th>
+                <th>Хозяева</th>
+                <th>Счёт</th>
+                <th>Гости</th>
+                <th>Схемы</th>
+              </tr>
+            </thead>
+            <tbody id="matches-body"></tbody>
+          </table>
+        </div>
+      </section>
+<!--/spa-view:matches-->
+
+      
+
+<!--spa-view:xi-->
+<section id="view-xi" class="view" hidden>
+        <div class="toolbar wrap">
+          <label>
+            Режим
+            <select id="xi-mode">
+              <option value="clubs">Клубы · идеальный XI</option>
+              <option value="manager">Моя команда Mantra</option>
+            </select>
+          </label>
+          <label id="xi-season-wrap">
+            Сезон
+            <select id="xi-season"></select>
+          </label>
+          <label id="xi-mantra-league-wrap" hidden>
+            Лига Mantra
+            <select id="xi-mantra-league"><option value="">Выбери…</option></select>
+          </label>
+          <label id="xi-mantra-round-wrap" hidden>
+            Тур
+            <select id="xi-mantra-round"></select>
+          </label>
+          <label id="xi-mantra-formation-wrap" hidden>
+            Схема Mantra
+            <select id="xi-mantra-formation"></select>
+          </label>
+          <p class="meta" id="xi-meta"></p>
+        </div>
+        <div class="teams-scroll" id="xi-teams" aria-label="Клубы / команды"></div>
+        <div class="xi-board" id="xi-board" hidden>
+          <div class="xi-board-head">
+            <div class="xi-team-title">
+              <img id="xi-team-logo" alt="" width="48" height="48" />
+              <div>
+                <h2 id="xi-team-name">—</h2>
+                <p class="meta" id="xi-team-meta"></p>
+              </div>
+            </div>
+            <div class="xi-stats" id="xi-stats"></div>
+          </div>
+          <div class="xi-stage">
+            <div class="xi-pitches">
+              <div class="pitch" id="xi-pitch" aria-label="Predicted formation"></div>
+              <div class="xi-expert" id="xi-expert" hidden>
+                <div class="xi-expert-head">
+                  <h3 class="xi-expert-title" id="xi-expert-title">Эксперты</h3>
+                  <p class="meta" id="xi-expert-meta"></p>
+                </div>
+                <div class="xi-expert-pitches" id="xi-expert-pitches"></div>
+              </div>
+            </div>
+            <aside class="bench" aria-label="Backups">
+              <h3 id="xi-bench-title">Запас</h3>
+              <ul id="xi-backups"></ul>
+            </aside>
+          </div>
+          <div class="manager-lineups" id="manager-lineups" hidden>
+            <div class="lineup-meta" id="manager-lineup-meta"></div>
+            <h3 class="subhead">Основа (XI)</h3>
+            <div class="table-wrap">
+              <table class="data-table compact-table">
+                <thead>
+                  <tr>
+                    <th>Слот</th>
+                    <th>Игрок</th>
+                    <th>Pos</th>
+                    <th>Клуб</th>
+                    <th>Матч</th>
+                    <th>Odds</th>
+                    <th>Рейтинг</th>
+                  </tr>
+                </thead>
+                <tbody id="manager-xi-body"></tbody>
+              </table>
+            </div>
+            <h3 class="subhead">Запас</h3>
+            <div class="table-wrap">
+              <table class="data-table compact-table">
+                <thead>
+                  <tr>
+                    <th>Игрок</th>
+                    <th>Pos</th>
+                    <th>Клуб</th>
+                    <th>Матч</th>
+                    <th>Odds</th>
+                    <th>Рейтинг</th>
+                    <th>Статус</th>
+                  </tr>
+                </thead>
+                <tbody id="manager-bench-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <section class="roster" aria-label="Players table">
+          <div class="roster-head">
+            <h2 id="roster-title">Все игроки</h2>
+            <p class="meta" id="roster-meta">Выбери чемпионат…</p>
+          </div>
+          <div class="toolbar wrap roster-filters" id="roster-filters">
+            <label>
+              Клуб
+              <select id="roster-club"><option value="">Все</option></select>
+            </label>
+            <label>
+              Роль (TM)
+              <select id="roster-pos">
+                <option value="">Все</option>
+                <option value="GK">GK</option>
+                <option value="DEF">DEF</option>
+                <option value="MID">MID</option>
+                <option value="ATT">ATT</option>
+                <option value="LB">LB</option>
+                <option value="CB">CB</option>
+                <option value="RB">RB</option>
+                <option value="DM">DM</option>
+                <option value="CM">CM</option>
+                <option value="AM">AM</option>
+                <option value="LW">LW</option>
+                <option value="RW">RW</option>
+                <option value="ST">ST</option>
+              </select>
+            </label>
+            <label id="roster-mantra-wrap">
+              Mantra
+              <select id="roster-mantra"><option value="">Все</option></select>
+            </label>
+            <label id="roster-free-wrap">
+              Свободен в
+              <select id="roster-free"><option value="">Все</option></select>
+            </label>
+            <label>
+              Состав
+              <select id="roster-xi">
+                <option value="">Все</option>
+                <option value="starter">Основной</option>
+                <option value="backup">Backup</option>
+                <option value="squad">Вне XI</option>
+              </select>
+            </label>
+            <div class="filter-toggle-field">
+              <span>Эксперты</span>
+              <button
+                type="button"
+                class="filter-toggle"
+                id="roster-expert-50"
+                aria-pressed="false"
+                title="Вероятность основы по экспертам ≥ 50%"
+              >
+                50%+
+              </button>
+            </div>
+            <label>
+              Сортировка
+              <select id="roster-sort">
+                <option value="rating-desc">Рейтинг ↓</option>
+                <option value="rating-asc">Рейтинг ↑</option>
+                <option value="name">Имя</option>
+                <option value="value-desc">Стоимость ↓</option>
+              </select>
+            </label>
+            <label class="grow">
+              Поиск
+              <input id="roster-q" type="search" placeholder="Имя игрока…" />
+            </label>
+          </div>
+          <p class="meta mantra-note" id="roster-mantra-note" hidden></p>
+          <div class="table-wrap">
+            <table class="data-table roster-table">
+              <thead>
+                <tr>
+                  <th>Игрок</th>
+                  <th>Клуб</th>
+                  <th>Основная роль</th>
+                  <th>Доп. роли</th>
+                  <th>Mantra</th>
+                  <th>Состав</th>
+                  <th title="Эксперты (Sorare % / Athletic / FFS)">Эксп.</th>
+                  <th>Рейтинг</th>
+                  <th>€</th>
+                </tr>
+              </thead>
+              <tbody id="roster-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+<!--/spa-view:xi-->
+
+      
+
+<!--spa-view:sorare-->
+<section id="view-sorare" class="view" hidden>
+        <div class="toolbar wrap">
+          <div>
+            <h2>Фейк Мопс</h2>
+            <p class="meta" id="expected11-meta">Загрузка прогнозов Expected 11…</p>
+          </div>
+          <label class="expected11-filter">
+            Тур
+            <select id="expected11-tour"></select>
+          </label>
+          <label class="expected11-filter">
+            Матч
+            <select id="expected11-filter">
+              <option value="">Все матчи / все клубы</option>
+            </select>
+          </label>
+          <button type="button" class="col-picker-btn" id="expected11-refresh">Показать</button>
+        </div>
+        <section id="expected11-ingest" class="expected11-ingest" hidden></section>
+        <section class="expected11-match" id="expected11-match"></section>
+        <div class="expected11-results" id="expected11-clubs"></div>
+      </section>
+<!--/spa-view:sorare-->
+
+      
+
+<!--spa-view:auctions-->
+<section id="view-auctions" class="view" hidden>
+        <div class="auctions-head">
+          <div>
+            <h2>Аукционы Mantra</h2>
+            <p class="meta" id="auctions-meta" role="status" aria-live="polite">
+              Загрузка аукционов…
+            </p>
+          </div>
+          <button type="button" class="col-picker-btn" id="auctions-refresh">Обновить</button>
+        </div>
+        <div class="auction-scope-grid" id="auction-scopes" aria-label="Чемпионаты"></div>
+        <details class="auction-coverage">
+          <summary>Покрытие лиг и аукционов</summary>
+          <div class="auction-coverage-list" id="auction-coverage-list"></div>
+        </details>
+        <section class="auction-team-report" aria-labelledby="auction-team-report-title">
+          <div class="auction-team-report-head">
+            <div>
+              <h3 id="auction-team-report-title">Отчёт fantasy-команды</h3>
+              <p>
+                Расчёт использует финальные записи ставок API Mantra. Минимум — самая
+                высокая ставка другой fantasy-команды +1M.
+              </p>
+            </div>
+            <p id="auction-team-report-status" role="status" aria-live="polite">
+              Выберите аукцион и fantasy-команду
+            </p>
+          </div>
+          <div class="auction-team-report-controls">
+            <label id="auction-report-league-wrap" hidden>
+              Fantasy-лига
+              <select id="auction-report-league" aria-label="Fantasy-лига отчёта"></select>
+            </label>
+            <label id="auction-report-auction-wrap" hidden>
+              Аукцион
+              <select id="auction-report-auction" aria-label="Аукцион отчёта"></select>
+            </label>
+            <label>
+              Поиск fantasy-команды
+              <input
+                id="auction-report-team-search"
+                type="search"
+                maxlength="100"
+                placeholder="Название fantasy-команды…"
+                aria-label="Поиск fantasy-команды"
+                disabled
+              />
+            </label>
+            <label>
+              Fantasy-команда
+              <select id="auction-report-team" aria-label="Fantasy-команда отчёта" disabled>
+                <option value="">Выберите fantasy-команду</option>
+              </select>
+            </label>
+          </div>
+          <div id="auction-team-spending"></div>
+          <div id="auction-team-report-summary"></div>
+          <div id="auction-team-report-picks"></div>
+          <div class="auction-pagination" id="auction-team-report-pagination"></div>
+        </section>
+        <section
+          class="auction-team-report auction-ideal-pick"
+          id="auction-ideal-pick"
+          aria-labelledby="auction-ideal-pick-title"
+          hidden
+        >
+          <div class="auction-team-report-head">
+            <div>
+              <h3 id="auction-ideal-pick-title">Идеальный пик</h3>
+              <p>
+                По этапам от раннего к позднему: ставка менеджера ↓, максимум этапа ↓,
+                средняя уникальных финальных ставок API ↓, стабильный ID. Идеальная
+                ставка — максимум других fantasy-команд +1M; расчёты менеджеров независимы.
+              </p>
+              <p>
+                «Кто перебил» сравнивает идеальные цели с историческим исходом при исходных
+                ставках. Новую идеальную ставку исторически никто бы не перебил.
+                «Перебил на этапе» и «Забрал позже» — разные исходы.
+              </p>
+            </div>
+            <p id="auction-ideal-pick-status" role="status" aria-live="polite">
+              Выберите fantasy-команду
+            </p>
+          </div>
+          <div id="auction-ideal-pick-summary"></div>
+          <div id="auction-ideal-pick-outbid"></div>
+          <div id="auction-ideal-pick-picks"></div>
+        </section>
+        <div class="toolbar wrap auction-toolbar">
+          <label>
+            Аукцион
+            <select id="auction-select"></select>
+          </label>
+          <label>
+            Этап
+            <select id="auction-stage"><option value="">Все</option></select>
+          </label>
+          <label>
+            Результат
+            <select id="auction-outcome">
+              <option value="">Все</option>
+              <option value="success">Успешные</option>
+              <option value="failed">Неуспешные</option>
+            </select>
+          </label>
+          <label class="grow">
+            Поиск
+            <input id="auction-q" type="search" placeholder="Имя игрока…" maxlength="100" />
+          </label>
+          <label>
+            Сортировка
+            <select id="auction-sort">
+              <option value="maxBid:desc">Максимальная ставка API ↓</option>
+              <option value="maxBid:asc">Максимальная ставка API ↑</option>
+              <option value="finalPrice:desc">Финальная цена ↓</option>
+              <option value="bidRecords:desc">Записи ставок API ↓</option>
+              <option value="bidRecords:asc">Записи ставок API ↑</option>
+              <option value="stages:desc">Этапы игрока ↓</option>
+              <option value="stages:asc">Этапы игрока ↑</option>
+              <option value="bidAmount:desc">Сумма ставок API, M ↓</option>
+              <option value="bidAmount:asc">Сумма ставок API, M ↑</option>
+              <option value="name:asc">Имя</option>
+            </select>
+          </label>
+          <button type="button" class="col-picker-btn" id="auction-reset-filters">
+            Сбросить фильтры
+          </button>
+        </div>
+        <div class="auction-metric-filters" aria-label="Фильтры параметров аукциона">
+          <fieldset>
+            <legend>Записи ставок API</legend>
+            <label>Мин. <input id="auction-bids-min" type="number" min="0" step="1" inputmode="numeric" /></label>
+            <label>Макс. <input id="auction-bids-max" type="number" min="0" step="1" inputmode="numeric" /></label>
+          </fieldset>
+          <fieldset>
+            <legend>Этапы игрока</legend>
+            <label>Мин. <input id="auction-stages-min" type="number" min="0" step="1" inputmode="numeric" /></label>
+            <label>Макс. <input id="auction-stages-max" type="number" min="0" step="1" inputmode="numeric" /></label>
+          </fieldset>
+          <fieldset>
+            <legend>Сумма ставок API, M</legend>
+            <label>Мин. <input id="auction-amount-min" type="number" min="0" step="0.01" inputmode="decimal" /></label>
+            <label>Макс. <input id="auction-amount-max" type="number" min="0" step="0.01" inputmode="decimal" /></label>
+          </fieldset>
+        </div>
+        <div class="auction-provenance" id="auction-provenance"></div>
+        <div class="auction-player-list" id="auction-players"></div>
+        <div class="auction-pagination" id="auction-pagination"></div>
+      </section>
+<!--/spa-view:auctions-->
+
+      
+
+<!--spa-view:mapping-->
+<section id="view-mapping" class="view" hidden>
+        <div class="toolbar wrap">
+          <div>
+            <h2>Expected 11 · Mapping</h2>
+            <p class="meta" id="mapping-meta">Загрузка несвязанных игроков…</p>
+          </div>
+          <label>
+            Чемпионат
+            <select id="mapping-league"><option value="">Все лиги</option></select>
+          </label>
+          <button type="button" class="col-picker-btn" id="mapping-refresh">Обновить</button>
+        </div>
+        <p class="account-message" id="mapping-status" role="status"></p>
+        <section id="mapping-ingest" class="mapping-ingest" hidden></section>
+        <div class="mapping-results" id="mapping-results"></div>
+        <section class="mapping-audit">
+          <h2>Ручные связи</h2>
+          <div id="mapping-audit"></div>
+        </section>
+      </section>
+<!--/spa-view:mapping-->
+
+      
+
+<!--spa-view:premium-->
+<section id="view-premium" class="view" hidden>
+        <div class="toolbar wrap">
+          <label>
+            Команда
+            <select id="premium-team"><option value="">Все команды</option></select>
+          </label>
+          <button type="button" class="col-picker-btn" id="premium-refresh">Обновить состав моей команды</button>
+          <p class="meta" id="premium-meta">Загрузка Premium…</p>
+        </div>
+        <p class="premium-help" id="premium-help"></p>
+        <p class="account-message" id="premium-manager-message"></p>
+        <section class="premium-selection">
+          <div class="premium-selection-head">
+            <div>
+              <h2>Состав Mantra</h2>
+              <p class="meta" id="premium-selection-count">Никто не выбран</p>
+            </div>
+            <button type="button" class="col-picker-btn" id="premium-generate">
+              Сгенерировать состав
+            </button>
+          </div>
+          <p class="premium-selection-message" id="premium-selection-message" role="status"></p>
+          <div class="premium-formations" id="premium-formations"></div>
+        </section>
+        <div class="table-wrap">
+          <table class="data-table premium-table">
+            <thead>
+              <tr>
+                <th class="premium-select-col"><span class="sr-only">Выбор</span></th>
+                <th>Pos</th>
+                <th>Игрок</th>
+                <th>Клуб</th>
+                <th>Expected 11</th>
+                <th aria-sort="none">
+                  <button type="button" class="premium-sort-button"
+                    data-premium-sort="displayedPercentage" data-sort-label="Вероятность XI"
+                    aria-label="Вероятность XI: сортировать по убыванию">
+                    Вероятность XI <span class="premium-sort-indicator" aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th aria-sort="none">
+                  <button type="button" class="premium-sort-button"
+                    data-premium-sort="footmopsPercentage" data-sort-label="футмопс"
+                    aria-label="футмопс: сортировать по убыванию">
+                    футмопс <span class="premium-sort-indicator" aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th>Матч</th>
+                <th aria-sort="none">
+                  <button type="button" class="premium-sort-button"
+                    data-premium-sort="winProbability" data-sort-label="P(win)"
+                    aria-label="P(win): сортировать по убыванию">
+                    P(win) <span class="premium-sort-indicator" aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th aria-sort="none">
+                  <button type="button" class="premium-sort-button"
+                    data-premium-sort="cleanSheetProbability" data-sort-label="CS клуба"
+                    aria-label="CS клуба: сортировать по убыванию">
+                    CS клуба <span class="premium-sort-indicator" aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th aria-sort="none">
+                  <button type="button" class="premium-sort-button"
+                    data-premium-sort="opponentCleanSheetProbability" data-sort-label="CS соперника"
+                    aria-label="CS соперника: сортировать по убыванию">
+                    CS соперника <span class="premium-sort-indicator" aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th>Счёт</th>
+              </tr>
+            </thead>
+            <tbody id="premium-body"></tbody>
+          </table>
+        </div>
+      </section>
+<!--/spa-view:premium-->
+
+      
+
+<!--spa-view:league-one-->
+<section id="view-league-one" class="view" hidden>
+        <div class="toolbar wrap">
+          <div>
+            <h2>League One · FotMob ↔ Transfermarkt</h2>
+            <p class="meta" id="league-one-meta">Загрузка…</p>
+          </div>
+          <div class="live-round-tabs" id="league-one-subtabs" role="tablist" aria-label="League One">
+            <button type="button" class="tab" data-league-one-tab="players" aria-selected="true">
+              Игроки
+            </button>
+            <button type="button" class="tab" data-league-one-tab="reports" aria-selected="false">
+              Отчёты
+            </button>
+          </div>
+        </div>
+
+        <div id="league-one-panel-players">
+        <div class="toolbar wrap">
+          <label>
+            Статус
+            <select id="league-one-status">
+              <option value="">Все</option>
+              <option value="linked">linked</option>
+              <option value="unmatched">unmatched</option>
+              <option value="ambiguous">ambiguous</option>
+            </select>
+          </label>
+          <label>
+            Клуб
+            <select id="league-one-club"><option value="">Все клубы</option></select>
+          </label>
+          <label>
+            Поз. TM (или)
+            <div class="col-filter-multi" id="league-one-tm-pos-wrap">
+              <button
+                type="button"
+                class="col-filter-multi-btn"
+                id="league-one-tm-pos-btn"
+                aria-expanded="false"
+              >
+                Все
+              </button>
+              <div class="col-filter-multi-menu" id="league-one-tm-pos-menu" hidden></div>
+            </div>
+          </label>
+          <label>
+            Поз. TM (и)
+            <select id="league-one-tm-pos-and"><option value="">—</option></select>
+          </label>
+          <label>
+            Поз. FotMob (или)
+            <div class="col-filter-multi" id="league-one-fotmob-pos-wrap">
+              <button
+                type="button"
+                class="col-filter-multi-btn"
+                id="league-one-fotmob-pos-btn"
+                aria-expanded="false"
+              >
+                Все
+              </button>
+              <div class="col-filter-multi-menu" id="league-one-fotmob-pos-menu" hidden></div>
+            </div>
+          </label>
+          <label>
+            Поз. FotMob (и)
+            <select id="league-one-fotmob-pos-and"><option value="">—</option></select>
+          </label>
+          <button type="button" class="col-picker-btn" id="league-one-refresh">Обновить снимок</button>
+        </div>
+        <div class="toolbar wrap league-one-assign-bar">
+          <label class="league-one-select-all">
+            <input type="checkbox" id="league-one-select-all" />
+            Выбрать видимых
+          </label>
+          <label>
+            Mantra-позиция
+            <select id="league-one-assign-pos"></select>
+          </label>
+          <button type="button" class="col-picker-btn" id="league-one-assign">
+            Назначить выбранным
+          </button>
+          <button type="button" class="col-picker-btn" id="league-one-clear-mantra">
+            Очистить позиции mantra
+          </button>
+          <p class="meta" id="league-one-selection-count">Никто не выбран</p>
+        </div>
+        <p class="account-message" id="league-one-status-msg" role="status"></p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="league-one-check-col"><span class="sr-only">Выбор</span></th>
+                <th>Клуб TM</th>
+                <th>Игрок TM</th>
+                <th>Позиции TM</th>
+                <th>FotMob</th>
+                <th>Поз. FotMob</th>
+                <th>Mantra</th>
+                <th>Статус</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody id="league-one-body"></tbody>
+          </table>
+        </div>
+        <section class="mapping-audit" id="league-one-orphans-wrap" hidden>
+          <h2>FotMob без пары TM</h2>
+          <p class="meta">Выбери TM-игрока без FotMob-пары и нажми «Связать».</p>
+          <div id="league-one-orphans"></div>
+        </section>
+        </div>
+
+        <div id="league-one-panel-reports" hidden>
+          <div class="toolbar wrap">
+            <p class="meta" id="league-one-reports-meta">Загрузка отчётов…</p>
+            <label>
+              Mantra-позиция
+              <div class="col-filter-multi" id="league-one-reports-pos-wrap">
+                <button
+                  type="button"
+                  class="col-filter-multi-btn"
+                  id="league-one-reports-pos-btn"
+                  aria-expanded="false"
+                >
+                  Все
+                </button>
+                <div class="col-filter-multi-menu" id="league-one-reports-pos-menu" hidden></div>
+              </div>
+            </label>
+            <label>
+              Клуб
+              <div class="col-filter-multi" id="league-one-reports-club-wrap">
+                <button
+                  type="button"
+                  class="col-filter-multi-btn"
+                  id="league-one-reports-club-btn"
+                  aria-expanded="false"
+                >
+                  Все
+                </button>
+                <div class="col-filter-multi-menu" id="league-one-reports-club-menu" hidden></div>
+              </div>
+            </label>
+            <button type="button" class="col-picker-btn" id="league-one-reports-sync">
+              Синхронизировать матчи
+            </button>
+          </div>
+          <p class="meta" id="league-one-reports-hint">
+            BS = оценка FotMob · TS = Mantra total по основной Mantra-позиции (первая назначенная).
+          </p>
+          <p class="account-message" id="league-one-reports-status" role="status"></p>
+          <div class="table-wrap league-one-reports-wrap">
+            <table class="data-table compact-table" id="league-one-reports-table">
+              <thead id="league-one-reports-head"></thead>
+              <tbody id="league-one-reports-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<!--/spa-view:league-one-->
+
+      
+
+<!--spa-view:builder-->
+<section id="view-builder" class="view" hidden>
+        <div class="toolbar wrap builder-toolbar">
+          <label hidden>
+            Страна / турнир
+            <select id="builder-competition"></select>
+          </label>
+          <label>
+            Лига Mantra
+            <select id="builder-league"><option value="">Выбери…</option></select>
+          </label>
+          <label>
+            Команда
+            <select id="builder-team"><option value="">Выбери…</option></select>
+          </label>
+          <label class="builder-my-teams">
+            <input type="checkbox" id="builder-my-teams" />
+            Только мои команды
+          </label>
+          <label class="builder-my-teams">
+            <input type="checkbox" id="builder-show-alternatives" />
+            Показывать вторую опцию
+          </label>
+          <label>
+            Схема
+            <select id="builder-formation"><option value="">Выбери…</option></select>
+          </label>
+          <button type="button" class="col-picker-btn" id="builder-clear">Очистить состав</button>
+          <button type="button" class="col-picker-btn" id="builder-download" disabled>
+            Скачать PNG
+          </button>
+          <p class="meta" id="builder-meta">Выбери лигу Mantra и команду</p>
+        </div>
+
+        <div class="builder-team-head" id="builder-team-head" hidden>
+          <img id="builder-team-logo" alt="" width="48" height="48" />
+          <div>
+            <h2 id="builder-team-name">—</h2>
+            <p class="meta" id="builder-team-meta"></p>
+          </div>
+        </div>
+
+        <div class="builder-save-bar">
+          <label class="grow">
+            Название состава
+            <input id="builder-save-name" maxlength="80" placeholder="Например: Основной состав" />
+          </label>
+          <button type="button" class="col-picker-btn" id="builder-save">Сохранить</button>
+          <label class="grow">
+            Сохранённые составы
+            <select id="builder-saved"><option value="">Нет сохранений</option></select>
+          </label>
+          <button type="button" class="col-picker-btn" id="builder-load-save" disabled>Загрузить</button>
+          <button type="button" class="col-picker-btn danger" id="builder-delete-save" disabled>Удалить</button>
+          <p class="meta" id="builder-save-meta">Войди через Google, чтобы сохранять составы</p>
+        </div>
+
+        <div class="squad-builder-layout">
+          <div class="pitch squad-builder-pitch" id="builder-pitch">
+            <div class="builder-empty">Выбери команду и схему</div>
+          </div>
+          <aside class="squad-builder-roster">
+            <div class="builder-roster-head">
+              <div>
+                <h2>Игроки команды</h2>
+                <p class="meta" id="builder-slot-hint">Выбери позицию на поле</p>
+              </div>
+              <button type="button" class="col-picker-btn" id="builder-slot-clear" hidden>
+                Освободить слот
+              </button>
+            </div>
+            <div class="builder-player-list" id="builder-player-list"></div>
+          </aside>
+        </div>
+      </section>
+<!--/spa-view:builder-->
+
+      
+
+<!--spa-view:live-->
+<section id="view-live" class="view" hidden>
+        <div class="toolbar wrap">
+          <div class="live-round-tabs" id="live-round-tabs" role="tablist" aria-label="Tour"></div>
+          <p class="meta" id="live-meta">Загрузка тура…</p>
+        </div>
+        <p class="live-help">
+          Mantra: составы XI синкаются локально раз в тур; очки считаем по правилам Mantra из
+          FotMob (рейтинг + бонусы), когда клуб уже играет или сыграл. FotMob обновляется каждые 5 мин.
+        </p>
+        <section class="mantra-tours" id="mantra-tours">
+          <div class="mantra-tours-head">
+            <h2 class="mantra-tours-title">Mantra · дивизионы</h2>
+            <label class="live-pin-leagues" id="live-pin-leagues-wrap" hidden>
+              <input type="checkbox" id="live-pin-leagues" />
+              <span id="live-pin-leagues-label">Показывай мои лиги вверху</span>
+            </label>
+            <p class="meta" id="mantra-tours-meta">—</p>
+          </div>
+          <div class="mantra-tours-grid" id="mantra-tours-grid"></div>
+          <div id="dream-team-slot" class="dream-team-slot" hidden></div>
+          <div id="ideal-standings-slot" class="ideal-standings-slot" hidden></div>
+        </section>
+        <h2 class="live-section-title" id="live-fotmob-title">FotMob · Live</h2>
+        <div class="live-layout">
+          <div class="live-list" id="live-list"></div>
+          <div class="live-detail" id="live-detail" hidden>
+            <div class="live-detail-head">
+              <div>
+                <h2 id="live-detail-title">—</h2>
+                <p class="meta" id="live-detail-meta"></p>
+              </div>
+              <a id="live-detail-fotmob" class="live-ext" href="#" target="_blank" rel="noopener">FotMob ↗</a>
+            </div>
+            <div class="live-detail-score" id="live-detail-score"></div>
+            <div class="live-detail-cols">
+              <section>
+                <h3>События</h3>
+                <ul class="live-events" id="live-events"></ul>
+              </section>
+              <section>
+                <h3>Оценки</h3>
+                <div class="table-wrap">
+                  <table class="data-table compact-table" id="live-ratings-table">
+                    <thead>
+                      <tr>
+                        <th></th>
+                        <th data-live-sort="name" class="sortable">Игрок</th>
+                        <th data-live-sort="team" class="sortable">Клуб</th>
+                        <th data-live-sort="rating" class="sortable is-sorted" data-dir="desc">Оц.</th>
+                      </tr>
+                    </thead>
+                    <tbody id="live-ratings"></tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </section>
+<!--/spa-view:live-->
+
+      
+
+<!--spa-view:ref-->
+<section id="view-ref" class="view" hidden>
+        <div class="toolbar wrap">
+          <label>
+            Категория
+            <select id="ref-category"></select>
+          </label>
+          <label class="grow">
+            Поиск
+            <input id="ref-q" type="search" placeholder="Название…" />
+          </label>
+          <p class="meta" id="ref-meta"></p>
+        </div>
+        <p class="ref-help" id="ref-help"></p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Название</th>
+              </tr>
+            </thead>
+            <tbody id="ref-body"></tbody>
+          </table>
+        </div>
+      </section>
+<!--/spa-view:ref-->
+    </main>
+
+    
+<!--spa-dialog:account-->
+<dialog id="account-dialog" class="account-dialog">
+      <form method="dialog" class="dialog-head">
+        <div class="dialog-title">
+          <img id="account-dialog-avatar" alt="" width="48" height="48" />
+          <div>
+            <h2 id="account-dialog-name">Аккаунт</h2>
+            <p class="meta" id="account-dialog-email"></p>
+          </div>
+        </div>
+        <button type="submit" class="close-btn" aria-label="Закрыть">×</button>
+      </form>
+      <div class="account-dialog-body">
+        <label>
+          Язык интерфейса
+          <select id="account-locale">
+            <option value="ru">RU · Русский</option>
+            <option value="en">EN · English</option>
+            <option value="uk">UA · Українська</option>
+            <option value="be">BY · Беларуская</option>
+          </select>
+        </label>
+        <label>
+          Часовой пояс
+          <select id="account-time-zone"></select>
+        </label>
+        <label>
+          Mantra Manager ID
+          <input id="account-manager-id" inputmode="numeric" placeholder="Например: 12345" />
+        </label>
+        <p class="meta">
+          ID используется для фильтра «Только мои команды». Его можно найти в профиле менеджера Mantra.
+        </p>
+        <section class="account-si-section">
+          <div class="account-si-head">
+            <div>
+              <strong>Официальный Sorare API</strong>
+              <p class="meta" id="account-sorare-status">Проверка статуса…</p>
+            </div>
+          </div>
+        </section>
+        <section class="account-si-section">
+          <div class="account-si-head">
+            <div>
+              <strong>SorareInside Browser import</strong>
+              <p class="meta" id="account-si-status">Импортов пока нет</p>
+              <p class="meta">Источник: видимые ленты Companion на sorare.com</p>
+            </div>
+            <button type="button" class="col-picker-btn danger" id="account-si-disconnect" hidden>
+              Очистить
+            </button>
+          </div>
+          <div id="account-si-connect">
+            <ol class="account-si-steps">
+              <li>В Chrome открой страницу расширений, включи Developer mode и выбери Load unpacked: <code>chrome://extensions</code></li>
+              <li>Укажи папку этого репозитория: <code>browser-import-helper</code></li>
+              <li>Создай одноразовый код ниже.</li>
+              <li>Открой страницу sorare.com, где Companion уже показал ленты, и вставь код в панель Mantra import.</li>
+            </ol>
+            <p class="meta">
+              Данные обновляются только когда ты открываешь страницы Sorare и запускаешь импорт. Токены, cookies и пароли не читаются.
+            </p>
+            <div class="account-si-code" id="account-si-code-wrap" hidden>
+              <code id="account-si-code"></code>
+              <p class="meta" id="account-si-code-expiry"></p>
+            </div>
+            <button type="button" class="col-picker-btn" id="account-si-generate">
+              Создать одноразовый код
+            </button>
+          </div>
+        </section>
+        <p class="meta account-message" id="account-message"></p>
+        <div class="account-actions">
+          <button type="button" class="col-picker-btn" id="account-save">Сохранить настройки</button>
+          <button type="button" class="col-picker-btn danger" id="account-logout">Выйти</button>
+        </div>
+      </div>
+    </dialog>
+<!--/spa-dialog:account-->
+
+    
+
+<!--spa-dialog:club-->
+<dialog id="club-dialog">
+      <form method="dialog" class="dialog-head">
+        <div class="dialog-title">
+          <img id="dialog-crest" alt="" width="48" height="48" />
+          <div>
+            <h2 id="dialog-name">—</h2>
+            <p class="meta" id="dialog-meta"></p>
+          </div>
+        </div>
+        <button type="submit" class="close-btn" aria-label="Закрыть">×</button>
+      </form>
+      <dl class="dialog-stats" id="dialog-stats"></dl>
+      <div class="table-wrap dialog-table">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th></th>
+              <th>Игрок</th>
+              <th>Основная роль</th>
+              <th>Дополнительные роли</th>
+              <th>Возраст</th>
+              <th>Цена</th>
+              <th>Контракт</th>
+            </tr>
+          </thead>
+          <tbody id="dialog-squad"></tbody>
+        </table>
+      </div>
+    </dialog>
+<!--/spa-dialog:club-->
+
+    
+
+<!--spa-dialog:game-->
+<dialog id="game-dialog">
+      <form method="dialog" class="dialog-head">
+        <div class="dialog-title">
+          <div>
+            <h2 id="game-title">—</h2>
+            <p class="meta" id="game-meta"></p>
+          </div>
+        </div>
+        <button type="submit" class="close-btn" aria-label="Закрыть">×</button>
+      </form>
+      <div class="game-columns" id="game-body"></div>
+    </dialog>
+<!--/spa-dialog:game-->
+
+    
+
+<!--spa-dialog:live-->
+<dialog id="dream-team-dialog">
+      <form method="dialog" class="dialog-head">
+        <div class="dialog-title">
+          <div>
+            <h2 id="dream-team-dialog-title">Dream Team</h2>
+            <p class="meta" id="dream-team-dialog-meta"></p>
+          </div>
+        </div>
+        <button type="submit" class="ghost" aria-label="Закрыть">✕</button>
+      </form>
+      <div class="dream-team-dialog-sum" id="dream-team-dialog-sum"></div>
+      <div class="table-wrap dream-team-table-wrap">
+        <table class="data-table compact-table dream-team-table">
+          <thead>
+            <tr>
+              <th class="dream-th-native">Pos</th>
+              <th>Игрок</th>
+              <th class="dream-th-slot">Слот</th>
+              <th class="dream-th-bs">BS</th>
+              <th class="dream-th-ts">TS</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="dream-team-dialog-body"></tbody>
+        </table>
+      </div>
+    </dialog>
+
+    <dialog id="ideal-vs-real-dialog" class="ideal-vs-real-dialog">
+      <form method="dialog" class="dialog-head">
+        <div class="dialog-title">
+          <div>
+            <h2 id="ideal-vs-real-title">Ideal vs Real</h2>
+            <p class="meta" id="ideal-vs-real-meta"></p>
+          </div>
+        </div>
+        <button type="submit" class="ghost" aria-label="Закрыть">✕</button>
+      </form>
+      <div class="ideal-vs-real-sum" id="ideal-vs-real-sum"></div>
+      <div class="ideal-vs-real-cols" id="ideal-vs-real-body"></div>
+    </dialog>
+
+    <dialog id="mantra-dialog">
+      <form method="dialog" class="dialog-head">
+        <div class="dialog-title">
+          <div>
+            <h2 id="mantra-dialog-title">—</h2>
+            <p class="meta" id="mantra-dialog-meta"></p>
+          </div>
+        </div>
+        <button type="submit" class="close-btn" aria-label="Закрыть">×</button>
+      </form>
+      <div class="mantra-dialog-score" id="mantra-dialog-score"></div>
+      <div class="mantra-dialog-cols" id="mantra-dialog-body"></div>
+    </dialog>
+
+    <!--/spa-dialog:live-->
+<p class="status" id="status">Загрузка…</p>
+    <div
+      id="content-loading"
+      class="content-loading"
+      hidden
+      aria-hidden="true"
+      aria-busy="false"
+      role="status"
+      aria-live="polite"
+    >
+      <div class="content-loading-spinner" aria-hidden="true"></div>
+      <span class="content-loading-label">Загрузка…</span>
+    </div>
+    <script src="/boot.js?v=27" type="module"></script>
+  </body>
+</html>

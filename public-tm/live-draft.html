@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Живой аукцион АПЛ · Mantra Helper</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/live-draft.css?v=14" />
+  </head>
+  <body>
+    <div class="glow" aria-hidden="true"></div>
+    <header class="top">
+      <div>
+        <a class="back-link" href="/">← К Mantra Helper</a>
+        <p class="brand">Mantra Helper</p>
+        <p class="tagline">Живой аукцион АПЛ</p>
+      </div>
+      <a class="account-login" id="live-draft-account-login" href="/auth/google">Войти через Google</a>
+    </header>
+
+    <main>
+      <div class="toolbar wrap">
+        <div>
+          <h1>Живой аукцион АПЛ</h1>
+          <p class="meta" id="live-draft-meta">Живой аукцион АПЛ</p>
+        </div>
+        <div class="live-draft-toolbar-actions">
+          <button type="button" class="col-picker-btn danger" id="live-draft-stop" hidden>STOP</button>
+          <div class="live-draft-admin" id="live-draft-admin" hidden>
+            <button type="button" class="col-picker-btn" id="live-draft-start">Начать</button>
+            <button type="button" class="col-picker-btn danger" id="live-draft-reset">Сбросить</button>
+          </div>
+        </div>
+      </div>
+      <article class="live-draft-placeholder" id="live-draft-access">
+        <p id="live-draft-copy">
+          Официальный live-аукцион Mantra: бюджет 260 млн, состав 26 игроков, минимум 3 вратаря.
+        </p>
+        <p class="meta" id="live-draft-hint">
+          Номинация по очереди от 1 млн. Шаг ставки по правилам. Молоток — 15 секунд.
+        </p>
+        <a class="account-login" id="live-draft-login" href="/auth/google" hidden>Войти через Google</a>
+      </article>
+      <div id="live-draft-board" hidden>
+        <form class="live-draft-actions live-draft-team-name" id="live-draft-team-name">
+          <label class="meta" for="live-draft-team-name-input">Название команды</label>
+          <input
+            id="live-draft-team-name-input"
+            type="text"
+            maxlength="40"
+            autocomplete="nickname"
+            placeholder="Название команды…"
+          />
+          <button type="submit" class="col-picker-btn">Сохранить</button>
+        </form>
+        <section class="live-draft-lot" id="live-draft-lot"></section>
+        <form class="live-draft-actions" id="live-draft-nominate" hidden>
+          <input id="live-draft-search" type="search" autocomplete="off" placeholder="Игрок АПЛ…" />
+          <input id="live-draft-nominate-amount" type="number" min="1" max="260" step="1" value="1" />
+          <label class="live-draft-as" id="live-draft-nominate-as-wrap" hidden>
+            <span class="meta">За менеджера</span>
+            <select id="live-draft-nominate-as"></select>
+          </label>
+          <button type="submit" class="col-picker-btn">Номинировать</button>
+          <div id="live-draft-search-results" class="live-draft-results"></div>
+        </form>
+        <form class="live-draft-actions live-draft-bid-form" id="live-draft-bid" hidden>
+          <div class="live-draft-bid-stepper">
+            <button type="button" class="col-picker-btn" id="live-draft-bid-down" aria-label="−">▼</button>
+            <input id="live-draft-bid-amount" type="number" min="1" max="260" step="1" />
+            <button type="button" class="col-picker-btn" id="live-draft-bid-up" aria-label="+">▲</button>
+          </div>
+          <span class="live-draft-bid-cap" id="live-draft-bid-cap"></span>
+          <label class="live-draft-as" id="live-draft-bid-as-wrap" hidden>
+            <span class="meta">За менеджера</span>
+            <select id="live-draft-bid-as"></select>
+          </label>
+          <button type="submit" class="col-picker-btn live-draft-bid-submit">Ставка</button>
+        </form>
+        <button type="button" class="live-draft-fold" id="live-draft-fold" hidden aria-pressed="false">
+          Не бидить
+        </button>
+        <p class="meta" id="live-draft-action-meta"></p>
+        <div class="live-draft-columns">
+          <section>
+            <h3>Менеджеры</h3>
+            <div id="live-draft-managers"></div>
+          </section>
+          <section>
+            <h3>Мой состав</h3>
+            <div id="live-draft-squad"></div>
+          </section>
+          <section class="live-draft-wishlist-panel">
+            <h3>Вишлист</h3>
+            <p class="meta">Только ты видишь этот список. Ставка — за сколько хочешь взять игрока.</p>
+            <form class="live-draft-actions" id="live-draft-wishlist-add">
+              <input id="live-draft-wishlist-search" type="search" autocomplete="off" placeholder="Игрок АПЛ…" />
+              <input id="live-draft-wishlist-amount" type="number" min="1" max="260" step="1" value="1" />
+              <button type="submit" class="col-picker-btn">Добавить</button>
+              <div id="live-draft-wishlist-results" class="live-draft-results"></div>
+            </form>
+            <div class="live-draft-wishlist-filters">
+              <label>
+                <span class="meta">Клуб</span>
+                <select id="live-draft-wishlist-club">
+                  <option value="">Все</option>
+                </select>
+              </label>
+              <label>
+                <span class="meta">Позиции Mantra</span>
+                <select id="live-draft-wishlist-position">
+                  <option value="">Все</option>
+                </select>
+              </label>
+            </div>
+            <p class="meta" id="live-draft-wishlist-filter-meta" hidden>Топ-5 по средней цене Mantra</p>
+            <div id="live-draft-wishlist-suggestions" class="live-draft-results" hidden></div>
+            <p class="meta" id="live-draft-wishlist-meta"></p>
+            <div id="live-draft-wishlist"></div>
+          </section>
+        </div>
+        <section class="live-draft-all-squads">
+          <h3>Составы</h3>
+          <div id="live-draft-all-squads" class="live-draft-all-squads-grid"></div>
+        </section>
+      </div>
+    </main>
+    <script src="/live-draft.js?v=17" type="module"></script>
+  </body>
+</html>

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ekstraklasa XI — 2026/27</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css?v=8" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+
+    <header class="hero">
+      <p class="brand">Ekstraklasa XI</p>
+      <h1>Predicted lineups 2026/27</h1>
+      <p class="lede">
+        Сила прошлого сезона, market value и предсезонная форма — starter и backup на каждую позицию.
+        Под игроком: стоимость и рейтинг. Цвет бейджа: красный у минимума XI → тёмно-зелёный к 100.
+      </p>
+    </header>
+
+    <main>
+      <section class="teams" aria-label="Clubs">
+        <div class="teams-scroll" id="teams"></div>
+      </section>
+
+      <section class="board" id="board" hidden>
+        <div class="board-head">
+          <div class="team-title">
+            <img id="team-logo" alt="" width="56" height="56" />
+            <div>
+              <h2 id="team-name">—</h2>
+              <p id="team-meta" class="meta"></p>
+            </div>
+          </div>
+          <div class="stats" id="stats"></div>
+        </div>
+
+        <div class="stage">
+          <div class="pitch" id="pitch" aria-label="Predicted formation"></div>
+          <aside class="bench" aria-label="Backups">
+            <h3>Backups</h3>
+            <ul id="backups"></ul>
+          </aside>
+        </div>
+      </section>
+
+      <section class="roster" aria-label="Players table">
+        <div class="roster-head">
+          <h2>Все игроки</h2>
+          <p class="meta" id="roster-meta">Загрузка…</p>
+        </div>
+        <div class="filters">
+          <label>
+            Клуб
+            <select id="filter-club">
+              <option value="">Все</option>
+            </select>
+          </label>
+          <label>
+            Роль (TM)
+            <select id="filter-pos">
+              <option value="">Все</option>
+              <option value="GK">GK</option>
+              <option value="DEF">DEF</option>
+              <option value="MID">MID</option>
+              <option value="ATT">ATT</option>
+              <option value="LB">LB</option>
+              <option value="CB">CB</option>
+              <option value="RB">RB</option>
+              <option value="DM">DM</option>
+              <option value="CM">CM</option>
+              <option value="AM">AM</option>
+              <option value="LW">LW</option>
+              <option value="RW">RW</option>
+              <option value="ST">ST</option>
+            </select>
+          </label>
+          <label>
+            Mantra
+            <select id="filter-mantra">
+              <option value="">Все</option>
+            </select>
+          </label>
+          <label>
+            Свободен в
+            <select id="filter-free-league">
+              <option value="">Все</option>
+            </select>
+          </label>
+          <label>
+            Состав
+            <select id="filter-xi">
+              <option value="">Все</option>
+              <option value="starter">Основной</option>
+              <option value="backup">Backup</option>
+              <option value="squad">Вне XI</option>
+            </select>
+          </label>
+          <label>
+            Сортировка
+            <select id="filter-sort">
+              <option value="rating-desc">Рейтинг ↓</option>
+              <option value="rating-asc">Рейтинг ↑</option>
+              <option value="name">Имя</option>
+              <option value="value-desc">Стоимость ↓</option>
+            </select>
+          </label>
+          <label class="grow">
+            Поиск
+            <input id="filter-q" type="search" placeholder="Имя игрока…" />
+          </label>
+        </div>
+        <div class="table-wrap">
+          <table class="roster-table" id="roster-table">
+            <thead>
+              <tr>
+                <th>Игрок</th>
+                <th>Клуб</th>
+                <th>Роль</th>
+                <th>Mantra</th>
+                <th>Состав</th>
+                <th>Рейтинг</th>
+                <th>€</th>
+              </tr>
+            </thead>
+            <tbody id="roster-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <p class="status" id="status">Loading clubs…</p>
+    </main>
+
+    <script src="/app.js?v=8" type="module"></script>
+  </body>
+</html>

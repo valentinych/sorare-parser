@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Mantra Sorare Browser Import",
+  "version": "1.0.0",
+  "description": "Imports visible Sorare Inside Companion projection ribbons into your Mantra account.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzORXthaHTlWn3ppDfqEJwD3lckAwu5KuEeHxwKOKcp5k5Hd/wlQ1kQknT+wt/viWm8ipw3ab4k+vudoilfod2IQja/cm+VXKqfacxg5gJOyTUnqf2hAAY8LQ3FmHrq5/XuwpnnNhQmn76+3L45WDMUsGxmuljXZZncecuCBKRu+WZRm8E5q3AFdLRp+DNg/DlIkS0tHS41jDlDdEOpsaNO6YYxQowxXrge3vT21XRVrh34ZYbvkohNIFfzMl8fmUiqm3i4lkEgSDBnATrXA14Fm7paxVloVQOkMNGPf/O4wKfe9dXuiLcLeMUkuEtk7AUQ2lKwWE4lLhUytLfhEdjwIDAQAB",
+  "permissions": [],
+  "host_permissions": [
+    "https://sorare.com/*",
+    "https://mantra.panenka.games/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://sorare.com/*"],
+      "js": ["parser.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

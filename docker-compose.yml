@@ -1,0 +1,86 @@
+# Mantra Desk on shared panenka Docker network (Caddy → mantra.panenka.games).
+# Web serves DB only; live-poll + live-compute refresh data every ~5 min.
+services:
+  mantra:
+    build: .
+    image: mantra-desk:latest
+    container_name: mantra
+    init: true
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      TM_PORT: "3081"
+      HOST: "0.0.0.0"
+      EXPECTED11_HEADLESS: "1"
+      LIVE_POLLER: "0"
+      LIVE_COMPUTE_INPROCESS: "0"
+      COMPUTE_ENQUEUE: "0"
+      LIVE_HTTP_REFRESH: "0"
+      XI_CACHE_WARMUP: "0"
+      SORARE_POLLER: "0"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    expose:
+      - "3081"
+    networks:
+      - panenkagames_default
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "require('http').get('http://127.0.0.1:3081/api/health',(r)=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+
+  live-poll:
+    image: mantra-desk:latest
+    container_name: mantra-live-poll
+    init: true
+    restart: unless-stopped
+    depends_on:
+      mantra:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      # Own FotMob/Mantra/AF/Sorare cadence; do not compute Ideal/scores here.
+      AF_POLL: "1"
+      SORARE_POLLER: "1"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    networks:
+      - panenkagames_default
+    healthcheck:
+      disable: true
+    command: ["npx", "tsx", "src/workers/liveDataPoll.ts"]
+
+  live-compute:
+    image: mantra-desk:latest
+    container_name: mantra-live-compute
+    init: true
+    restart: unless-stopped
+    depends_on:
+      mantra:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      COMPUTE_ENQUEUE: "1"
+      XI_CACHE_WARMUP: "1"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    networks:
+      - panenkagames_default
+    healthcheck:
+      disable: true
+    command: ["npx", "tsx", "src/workers/liveCompute.ts"]
+
+networks:
+  panenkagames_default:
+    external: true

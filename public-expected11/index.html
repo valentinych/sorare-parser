@@ -1,0 +1,1744 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Expected11 local parser</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        background: #f4f6f8;
+        color: #17212b;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 48px 20px;
+      }
+      main {
+        width: min(1100px, 100%);
+        margin: 0 auto;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(28px, 5vw, 42px);
+      }
+      .subtitle {
+        margin: 0 0 28px;
+        color: #5b6570;
+      }
+      .card {
+        margin-top: 18px;
+        padding: 22px;
+        border: 1px solid #dce1e5;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 8px 24px rgb(23 33 43 / 6%);
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 650;
+      }
+      .scope {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 14px;
+        margin-bottom: 8px;
+        padding: 14px;
+        border: 1px solid #dce1e5;
+        border-radius: 12px;
+        background: #f8fafc;
+      }
+      .scope.needs-selection {
+        border-color: #c47b00;
+        background: #fff8e8;
+        outline: 3px solid rgb(196 123 0 / 18%);
+      }
+      .scope-hint {
+        margin: 0 0 16px;
+        color: #5b6570;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .scope.needs-selection + .scope-hint {
+        color: #745400;
+        font-weight: 650;
+      }
+      select {
+        width: 100%;
+        min-height: 40px;
+        margin-top: 8px;
+        padding: 8px 11px;
+        border: 1px solid #bdc6ce;
+        border-radius: 9px;
+        background: #fff;
+        font: inherit;
+      }
+      select:focus {
+        border-color: #1869d4;
+        outline: 3px solid rgb(24 105 212 / 15%);
+      }
+      textarea {
+        width: 100%;
+        min-height: 150px;
+        resize: vertical;
+        padding: 13px;
+        border: 1px solid #bdc6ce;
+        border-radius: 9px;
+        font: 14px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+      }
+      textarea:focus {
+        border-color: #1869d4;
+        outline: 3px solid rgb(24 105 212 / 15%);
+      }
+      .controls,
+      .status-heading,
+      .result-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+      }
+      .result-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .controls {
+        margin-top: 15px;
+        flex-wrap: wrap;
+      }
+      .primary-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 12px;
+      }
+      button.rebuild {
+        min-height: 44px;
+        background: #1d6b35;
+      }
+      button.rebuild:hover {
+        background: #16562a;
+      }
+      .checkbox {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        font-weight: 500;
+      }
+      button,
+      .download {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        padding: 0 17px;
+        border: 0;
+        border-radius: 8px;
+        background: #1768d3;
+        color: #fff;
+        font: inherit;
+        font-weight: 650;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      button:hover,
+      .download:hover {
+        background: #1058b7;
+      }
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+      button.secondary,
+      .download {
+        background: #17212b;
+      }
+      button.secondary:hover,
+      .download:hover {
+        background: #0f161d;
+      }
+      button.publish {
+        background: #1d6b35;
+      }
+      button.publish:hover {
+        background: #16562a;
+      }
+      .notice {
+        margin-top: 16px;
+        padding: 12px 14px;
+        border-radius: 9px;
+        background: #fff6dc;
+        color: #634d0c;
+        font-size: 14px;
+        line-height: 1.45;
+      }
+      h2 {
+        margin: 0;
+        font-size: 19px;
+      }
+      .badge {
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: #e8edf2;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+      .badge.running {
+        background: #dcecff;
+        color: #1255a8;
+      }
+      .badge.waiting-login {
+        background: #fff0bf;
+        color: #745400;
+      }
+      .badge.publishing {
+        background: #dff5e5;
+        color: #1d6b35;
+      }
+      .badge.completed {
+        background: #dff5e5;
+        color: #1d6b35;
+      }
+      .badge.ready {
+        background: #dff5e5;
+        color: #1d6b35;
+      }
+      .badge.failed {
+        background: #ffe0e0;
+        color: #9b2424;
+      }
+      #message {
+        margin: 14px 0 7px;
+      }
+      #current-url,
+      #output-path {
+        overflow-wrap: anywhere;
+        color: #65717c;
+        font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+      }
+      progress {
+        width: 100%;
+        height: 10px;
+        margin: 14px 0;
+      }
+      pre {
+        max-height: 520px;
+        overflow: auto;
+        margin: 16px 0 0;
+        padding: 16px;
+        border-radius: 9px;
+        background: #111820;
+        color: #e8edf2;
+        font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace;
+        white-space: pre-wrap;
+      }
+      .matches {
+        display: grid;
+        gap: 18px;
+        margin-top: 18px;
+      }
+      .match-result {
+        padding-top: 18px;
+        border-top: 1px solid #e3e7ea;
+      }
+      .match-result:first-child {
+        padding-top: 0;
+        border-top: 0;
+      }
+      .match-meta,
+      .empty {
+        color: #65717c;
+        font-size: 13px;
+      }
+      .teams {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(390px, 100%), 1fr));
+        gap: 16px;
+        margin-top: 14px;
+      }
+      .team {
+        padding: 18px;
+        border: 1px solid #dce1e5;
+        border-radius: 12px;
+        background: #fbfcfd;
+      }
+      .team h4 {
+        margin: 0;
+        font-size: 18px;
+      }
+      .team-side {
+        color: #65717c;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+      .lineup-groups,
+      .notes {
+        display: grid;
+        gap: 14px;
+        margin-top: 16px;
+      }
+      .group h5,
+      .note h5 {
+        margin: 0 0 7px;
+        color: #556258;
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .players {
+        display: grid;
+        gap: 5px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .player {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .percentage {
+        flex: 0 0 auto;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: #e4ebdf;
+        color: #31552d;
+        font-size: 12px;
+        font-weight: 750;
+      }
+      .note p {
+        margin: 0;
+        color: #303a43;
+        line-height: 1.5;
+        white-space: pre-wrap;
+      }
+      .author {
+        margin: 17px 0 0;
+        color: #65717c;
+        font-size: 13px;
+      }
+      .logo-link {
+        display: inline-block;
+        margin-top: 5px;
+        color: #1768d3;
+        font-size: 12px;
+      }
+      details {
+        margin-top: 18px;
+      }
+      summary {
+        cursor: pointer;
+        color: #46515b;
+        font-weight: 650;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      .tabs {
+        display: flex;
+        gap: 8px;
+        margin: 0 0 18px;
+        flex-wrap: wrap;
+      }
+      .tabs button {
+        background: #e8edf2;
+        color: #17212b;
+      }
+      .tabs button:hover {
+        background: #dce3ea;
+      }
+      .tabs button[aria-selected="true"] {
+        background: #1768d3;
+        color: #fff;
+      }
+      .tabs button[aria-selected="true"]:hover {
+        background: #1058b7;
+      }
+      .league-list,
+      .match-list {
+        display: grid;
+        gap: 8px;
+        margin-top: 12px;
+        max-height: 420px;
+        overflow: auto;
+      }
+      .league-row,
+      .match-row {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 10px;
+        align-items: center;
+        padding: 10px 12px;
+        border: 1px solid #dce1e5;
+        border-radius: 10px;
+        background: #fbfcfd;
+      }
+      .match-row {
+        grid-template-columns: 1fr auto auto;
+        cursor: default;
+      }
+      .match-row button.side {
+        min-height: 34px;
+        padding: 0 12px;
+        font-size: 13px;
+      }
+      .match-row button.side.captured {
+        border-color: #1a7f4b;
+        background: #e8f7ef;
+        color: #0f5132;
+        font-weight: 650;
+      }
+      .match-row button.side.missing {
+        border-color: #c9d0d6;
+      }
+      .match-row .capture-meta {
+        font-size: 12px;
+        color: #5b6570;
+        margin-top: 4px;
+      }
+      .match-row button.side.captured {
+        background: #e8f7ee;
+        border-color: #8ecfa3;
+        color: #0f6b35;
+        font-weight: 650;
+      }
+      .match-row button.side.missing {
+        background: #fff7e8;
+        border-color: #e0c48a;
+        color: #745400;
+      }
+      .match-row .side-meta {
+        display: block;
+        font-size: 11px;
+        font-weight: 500;
+        opacity: 0.85;
+        margin-top: 2px;
+      }
+      .match-row button.side.captured {
+        border-color: #1f7a3f;
+        background: #e8f7ee;
+        color: #14532d;
+        font-weight: 650;
+      }
+      .match-row button.side.missing-lineup {
+        opacity: 0.55;
+      }
+      .match-row .side-meta {
+        display: block;
+        font-size: 11px;
+        font-weight: 500;
+        color: #5b6570;
+        margin-top: 2px;
+      }
+      .match-row button.side.captured .side-meta {
+        color: #1f7a3f;
+      }
+      .league-row label {
+        margin: 0;
+        font-weight: 500;
+      }
+      .league-row input[type="number"] {
+        width: 72px;
+        min-height: 34px;
+        padding: 4px 8px;
+        border: 1px solid #bdc6ce;
+        border-radius: 8px;
+        font: inherit;
+      }
+      .folder-picker {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        margin-top: 12px;
+        align-items: end;
+      }
+      .folder-picker label {
+        grid-column: 1 / -1;
+        margin-bottom: 0;
+      }
+      .folder-picker input[type="text"] {
+        width: 100%;
+        min-height: 40px;
+        padding: 8px 11px;
+        border: 1px solid #bdc6ce;
+        border-radius: 9px;
+        font: inherit;
+      }
+      .muted {
+        color: #65717c;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      code.path {
+        font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Local lineup tools</h1>
+      <p class="subtitle">Headed-browser runners on this computer only (port 3002).</p>
+
+      <div class="tabs" role="tablist" aria-label="Tool">
+        <button type="button" role="tab" id="tab-expected11" aria-selected="true" aria-controls="panel-expected11">
+          Expected11
+        </button>
+        <button type="button" role="tab" id="tab-sorare" aria-selected="false" aria-controls="panel-sorare">
+          SorareInside
+        </button>
+      </div>
+
+      <div id="panel-expected11" role="tabpanel" aria-labelledby="tab-expected11">
+      <form class="card" id="run-form">
+        <div class="scope" id="scope">
+          <label for="league">Championship
+            <select id="league" required></select>
+          </label>
+          <label for="tour">Tour
+            <select id="tour" required></select>
+          </label>
+        </div>
+        <p class="scope-hint" id="scope-hint">
+          Championship and Tour are stored with the match links. Save links does
+          not scrape. The green button re-parses the saved tour and merges into
+          production.
+        </p>
+        <label for="urls">Expected11 match URLs (one per line)</label>
+        <textarea
+          id="urls"
+          spellcheck="false"
+          placeholder="https://expected11.com/match/19729166/wolverhampton-wanderers-vs-blackburn-rovers"
+        ></textarea>
+        <p class="scope-hint" id="saved-hint">
+          No saved links for this tour yet. Paste URLs and click Сохранить ссылки.
+        </p>
+        <div class="controls">
+          <label class="checkbox">
+            <input id="diagnostic" type="checkbox" />
+            Print diagnostics in the server terminal
+          </label>
+          <label class="checkbox">
+            <input id="screenshot" type="checkbox" />
+            Screenshot green pitch areas while parsing
+          </label>
+          <button class="secondary" id="save-links" type="button">Сохранить ссылки</button>
+          <button id="start" type="submit">Start parser</button>
+        </div>
+        <div class="card" style="margin-top:14px;padding:14px;background:#f8fafc;box-shadow:none">
+          <label for="shot-mode">Screenshot tool (active Chrome profile)</label>
+          <p class="muted" style="margin:0.25rem 0 0.5rem">
+            Uses selected Tour; green captures save as
+            <code>data/expected11/output/{tour}/{club}.png</code>
+            (e.g. <code>3/millwall.png</code>).
+          </p>
+          <div class="scope" style="margin:8px 0 0;padding:0;border:0;background:transparent">
+            <label for="shot-mode">Mode
+              <select id="shot-mode">
+                <option value="green">Green pitch region</option>
+                <option value="coords">Window coordinates (clip)</option>
+              </select>
+            </label>
+            <label for="shot-url">Match URL
+              <input id="shot-url" type="url" placeholder="https://expected11.com/match/…" style="width:100%;min-height:40px;margin-top:8px;padding:8px 11px;border:1px solid #bdc6ce;border-radius:9px;font:inherit" />
+            </label>
+          </div>
+          <div id="shot-coords" class="scope" style="margin-top:10px;display:none">
+            <label>x <input id="shot-x" type="number" min="0" value="0" style="width:100%;min-height:36px;margin-top:6px" /></label>
+            <label>y <input id="shot-y" type="number" min="0" value="0" style="width:100%;min-height:36px;margin-top:6px" /></label>
+            <label>width <input id="shot-w" type="number" min="1" value="800" style="width:100%;min-height:36px;margin-top:6px" /></label>
+            <label>height <input id="shot-h" type="number" min="1" value="600" style="width:100%;min-height:36px;margin-top:6px" /></label>
+          </div>
+          <div class="primary-row">
+            <button class="secondary" id="take-screenshot" type="button">Take screenshot</button>
+          </div>
+          <p class="scope-hint" id="shot-status" style="margin:10px 0 0"></p>
+        </div>
+        <div class="primary-row">
+          <button class="rebuild" id="rebuild-publish" type="button">
+            Пересобрать и обновить прод
+          </button>
+        </div>
+        <div class="notice">
+          Links are stored per championship + tour in
+          <code>data/expected11/saved-tour-urls.json</code> and survive restart.
+          <strong>Пересобрать и обновить прод</strong> opens Chrome (login wait
+          if needed), parses saved match URLs one at a time, then merges into
+          production. Percentages and availability overwrite those match IDs;
+          other matches on the tour stay. Sign in with email and password —
+          not Continue with Google. No credentials are collected here.
+        </div>
+      </form>
+
+      <section class="card" aria-live="polite">
+        <div class="status-heading">
+          <h2>Status</h2>
+          <span class="badge" id="state">Idle</span>
+        </div>
+        <p id="message">Ready</p>
+        <div id="current-url"></div>
+        <progress id="progress" value="0" max="1"></progress>
+        <button class="secondary" id="continue" type="button" hidden>
+          Login complete — continue
+        </button>
+      </section>
+
+      <section class="card" id="result-card" hidden>
+        <div class="result-heading">
+          <h2>Result</h2>
+          <div class="result-actions">
+            <a class="download" href="/api/result/download">Download JSON</a>
+            <button class="publish" id="publish" type="button">Publish to production</button>
+          </div>
+        </div>
+        <p class="match-meta" id="publish-hint"></p>
+        <p class="match-meta" id="publish-status"></p>
+        <div id="output-path"></div>
+        <div class="matches" id="result"></div>
+        <details>
+          <summary>Raw JSON</summary>
+          <pre id="result-json"></pre>
+        </details>
+      </section>
+      </div>
+
+      <div id="panel-sorare" role="tabpanel" aria-labelledby="tab-sorare" hidden>
+        <form class="card" id="sorare-form">
+          <label for="sorare-url">SorareInside lineups URL</label>
+          <input
+            id="sorare-url"
+            type="url"
+            spellcheck="false"
+            placeholder="https://sorareinside.com/lineups?gwSlug=football-28-aug-1-sep-2026"
+            style="width:100%;min-height:40px;margin-top:8px;padding:8px 11px;border:1px solid #bdc6ce;border-radius:9px;font:inherit"
+          />
+          <p class="muted" style="margin:10px 0 0">
+            Screenshots + sidecar JSON save to the folder below as
+            <code class="path">{round}/{club}.png|.json</code>.
+            JSON probabilities stay local until you click
+            <strong>Залить JSON на прод</strong> (Premium «футмопс» via
+            <code class="path">/api/footmops/import</code>, same
+            <code class="path">EXPECTED11_IMPORT_TOKEN</code>).
+            Chrome profile:
+            <code class="path">data/sorare/chrome-profile</code>
+            (separate from Expected11).
+          </p>
+          <div class="folder-picker">
+            <label for="sorare-output-dir">Screenshot folder</label>
+            <input
+              id="sorare-output-dir"
+              type="text"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="data/sorare/output"
+            />
+            <button class="secondary" id="sorare-pick-folder" type="button">
+              Choose folder
+            </button>
+          </div>
+          <div class="controls">
+            <button id="sorare-discover" type="submit">Load leagues</button>
+            <button class="secondary" id="sorare-expand" type="button" disabled>
+              Expand selected
+            </button>
+          </div>
+          <div class="notice">
+            Paste a gameweek lineups URL, load leagues, check the ones you want,
+            set a round/tour next to each, then expand. Click a team side on a
+            match to open the SorareInside popup, parse %, and screenshot the
+            entire modal. Sign in in the Chrome window if prompted, then
+            <strong>Login complete — continue</strong>.
+          </div>
+        </form>
+
+        <section class="card" aria-live="polite">
+          <div class="status-heading">
+            <h2>SorareInside status</h2>
+            <span class="badge" id="sorare-state">Idle</span>
+          </div>
+          <p id="sorare-message">Ready</p>
+          <div id="sorare-current-url"></div>
+          <button class="secondary" id="sorare-continue" type="button" hidden>
+            Login complete — continue
+          </button>
+        </section>
+
+        <section class="card" id="sorare-leagues-card" hidden>
+          <h2>Leagues</h2>
+          <p class="muted" id="sorare-leagues-hint"></p>
+          <div class="league-list" id="sorare-leagues"></div>
+        </section>
+
+        <section class="card" id="sorare-matches-card" hidden>
+          <h2>Matches</h2>
+          <p class="muted" id="sorare-matches-hint"></p>
+          <div class="match-list" id="sorare-matches"></div>
+          <div class="controls" style="margin-top:14px">
+            <button id="sorare-publish" type="button">
+              Залить JSON на прод
+            </button>
+          </div>
+          <p class="muted" id="sorare-publish-hint" style="margin-top:8px">
+            Builds a footmops snapshot from
+            <code class="path">{folder}/{round}/*.json</code>
+            for each checked league’s round, then POSTs to production Premium
+            («футмопс»). Requires <code class="path">EXPECTED11_IMPORT_TOKEN</code>
+            and a deployed <code class="path">/api/footmops/import</code> on
+            mantra.panenka.games.
+          </p>
+          <p class="muted" id="sorare-capture-status" style="margin-top:12px"></p>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const tabExpected11 = document.querySelector("#tab-expected11");
+      const tabSorare = document.querySelector("#tab-sorare");
+      const panelExpected11 = document.querySelector("#panel-expected11");
+      const panelSorare = document.querySelector("#panel-sorare");
+
+      function showTab(which) {
+        const sorare = which === "sorare";
+        tabExpected11.setAttribute("aria-selected", sorare ? "false" : "true");
+        tabSorare.setAttribute("aria-selected", sorare ? "true" : "false");
+        panelExpected11.hidden = sorare;
+        panelSorare.hidden = !sorare;
+        if (sorare) refreshSorareStatus();
+      }
+      tabExpected11.addEventListener("click", () => showTab("expected11"));
+      tabSorare.addEventListener("click", () => showTab("sorare"));
+
+      const form = document.querySelector("#run-form");
+      const scopeEl = document.querySelector("#scope");
+      const leagueSelect = document.querySelector("#league");
+      const tourSelect = document.querySelector("#tour");
+      const urls = document.querySelector("#urls");
+      const diagnostic = document.querySelector("#diagnostic");
+      const screenshot = document.querySelector("#screenshot");
+      const start = document.querySelector("#start");
+      const saveLinks = document.querySelector("#save-links");
+      const rebuildPublish = document.querySelector("#rebuild-publish");
+      const shotMode = document.querySelector("#shot-mode");
+      const shotUrl = document.querySelector("#shot-url");
+      const shotCoords = document.querySelector("#shot-coords");
+      const shotStatus = document.querySelector("#shot-status");
+      const takeScreenshot = document.querySelector("#take-screenshot");
+      const shotX = document.querySelector("#shot-x");
+      const shotY = document.querySelector("#shot-y");
+      const shotW = document.querySelector("#shot-w");
+      const shotH = document.querySelector("#shot-h");
+      const savedHint = document.querySelector("#saved-hint");
+      const state = document.querySelector("#state");
+      const message = document.querySelector("#message");
+      const currentUrl = document.querySelector("#current-url");
+      const progress = document.querySelector("#progress");
+      const continueButton = document.querySelector("#continue");
+      const resultCard = document.querySelector("#result-card");
+      const outputPath = document.querySelector("#output-path");
+      const result = document.querySelector("#result");
+      const resultJson = document.querySelector("#result-json");
+      const publishButton = document.querySelector("#publish");
+      const publishHint = document.querySelector("#publish-hint");
+      const publishStatus = document.querySelector("#publish-status");
+      let resultLoaded = false;
+      let lastStatus = null;
+      let publishing = false;
+
+      function tourLabel(tour) {
+        const start = tour.startAt
+          ? new Date(tour.startAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+          : "";
+        const end = tour.endAt
+          ? new Date(tour.endAt).toLocaleDateString("en-GB", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })
+          : "";
+        const dates = start && end && start !== end ? `${start} – ${end}` : start || end;
+        const current = tour.current ? " (current)" : "";
+        return dates
+          ? `Tour ${tour.round} · ${dates}${current}`
+          : `Tour ${tour.round}${current}`;
+      }
+
+      function selectedScope() {
+        const league = leagueSelect.value;
+        const tour = Number(tourSelect.value);
+        if (!league || !Number.isInteger(tour) || tour < 1) return null;
+        return { league, tour };
+      }
+
+      function textareaUrls() {
+        return urls.value
+          .split(/\r?\n/)
+          .map((value) => value.trim())
+          .filter(Boolean);
+      }
+
+      function updateSavedHint(count, scope) {
+        if (!scope) {
+          savedHint.textContent = "Select Championship and Tour to load saved links.";
+          return;
+        }
+        savedHint.textContent = count
+          ? `Saved ${count} link(s) for ${scope.league} tour ${scope.tour}. They reload after restart.`
+          : `No saved links for ${scope.league} tour ${scope.tour} yet. Paste URLs and click Сохранить ссылки.`;
+      }
+
+      async function loadSavedUrls() {
+        const scope = selectedScope();
+        if (!scope) {
+          urls.value = "";
+          updateSavedHint(0, null);
+          return;
+        }
+        const busy =
+          lastStatus &&
+          (lastStatus.state === "running" ||
+            lastStatus.state === "waiting-login" ||
+            lastStatus.state === "publishing");
+        if (busy) return;
+        try {
+          const data = await request(
+            `/api/saved-urls?league=${encodeURIComponent(scope.league)}&tour=${scope.tour}`,
+          );
+          urls.value = (data.urls || []).join("\n");
+          updateSavedHint((data.urls || []).length, scope);
+        } catch (error) {
+          updateSavedHint(0, scope);
+          savedHint.textContent = error.message;
+        }
+      }
+
+      async function loadTours(preferredTour) {
+        const league = leagueSelect.value;
+        tourSelect.replaceChildren(new Option("Loading tours…", ""));
+        if (!league) return;
+        try {
+          const data = await request(`/api/tours?league=${encodeURIComponent(league)}`);
+          const tours = data.tours || [];
+          tourSelect.replaceChildren();
+          if (!tours.length) {
+            tourSelect.add(new Option("No tours in schedule", ""));
+            return;
+          }
+          for (const tour of tours) {
+            tourSelect.add(new Option(tourLabel(tour), String(tour.round)));
+          }
+          const selected =
+            preferredTour != null && tours.some((tour) => String(tour.round) === String(preferredTour))
+              ? String(preferredTour)
+              : String(tours.find((tour) => tour.current)?.round ?? tours[0].round);
+          tourSelect.value = selected;
+          await loadSavedUrls();
+        } catch (error) {
+          tourSelect.replaceChildren(new Option(error.message, ""));
+        }
+      }
+
+      async function loadCatalog() {
+        const data = await request("/api/leagues");
+        const leagues = data.leagues || [];
+        const selected = leagueSelect.value || data.defaultLeague || "championship";
+        leagueSelect.replaceChildren();
+        for (const league of leagues) {
+          leagueSelect.add(new Option(`${league.name} (${league.tmCompetition})`, league.slug));
+        }
+        if (leagues.some((league) => league.slug === selected)) {
+          leagueSelect.value = selected;
+        } else if (leagues.length) {
+          leagueSelect.value = leagues[0].slug;
+        }
+        await loadTours();
+      }
+
+      function updateActionButtons(status) {
+        lastStatus = status;
+        const scope = selectedScope();
+        const busy =
+          status.state === "running" ||
+          status.state === "waiting-login" ||
+          status.state === "publishing";
+        start.disabled = busy;
+        saveLinks.disabled = busy || !scope;
+        const rebuildBlocked =
+          busy || !scope || publishing || !status.publishConfigured;
+        rebuildPublish.disabled = rebuildBlocked;
+      }
+
+      function updatePublishControls(status) {
+        lastStatus = status;
+        const scope = selectedScope();
+        const missingScope = Boolean(status.downloadReady && !scope);
+        scopeEl.classList.toggle("needs-selection", missingScope);
+        updateActionButtons(status);
+
+        if (!status.downloadReady) {
+          publishButton.disabled = true;
+          publishHint.textContent = "";
+          return;
+        }
+
+        const hints = [];
+        let blocked = publishing;
+        if (!status.publishConfigured) {
+          blocked = true;
+          hints.push(
+            "Publish is disabled: set EXPECTED11_IMPORT_TOKEN in .env, then restart this UI.",
+          );
+        } else if (!status.publishReady) {
+          blocked = true;
+          hints.push("Publish is disabled: no matches with predictions.");
+        } else if (!scope) {
+          blocked = true;
+          hints.push("Select Championship and the correct Tour above, then publish.");
+        } else {
+          hints.push(
+            `Ready to publish ${scope.league} tour ${scope.tour} to mantra.panenka.games.`,
+          );
+          if (status.failedMatchCount > 0) {
+            hints.push(
+              `${status.failedMatchCount} match(es) had no predictions; production will skip those stubs and merge the rest.`,
+            );
+          }
+        }
+        publishButton.disabled = blocked;
+        publishHint.textContent = hints.join(" ");
+      }
+
+      leagueSelect.addEventListener("change", () => {
+        loadTours().then(() => {
+          if (lastStatus) updatePublishControls(lastStatus);
+        });
+      });
+      tourSelect.addEventListener("change", () => {
+        loadSavedUrls().then(() => {
+          if (lastStatus) updatePublishControls(lastStatus);
+        });
+      });
+
+      async function request(path, options) {
+        const response = await fetch(path, options);
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
+        return body;
+      }
+
+      async function loadResult(path) {
+        if (resultLoaded) return;
+        const output = await request("/api/result");
+        renderOutput(output);
+        resultJson.textContent = JSON.stringify(output, null, 2);
+        outputPath.textContent = path ? `Saved to ${path}` : "";
+        resultCard.hidden = false;
+        resultLoaded = true;
+      }
+
+      function node(tag, className, text) {
+        const element = document.createElement(tag);
+        if (className) element.className = className;
+        if (text !== undefined) element.textContent = text;
+        return element;
+      }
+
+      function renderOutput(output) {
+        result.replaceChildren();
+        for (const match of output.matches || []) {
+          const matchElement = node("article", "match-result");
+          matchElement.append(node("h3", "", match.match.title || match.sourceUrl));
+          matchElement.append(
+            node(
+              "p",
+              "match-meta",
+              `${match.status} · ${match.teams?.length || 0} teams · ${match.players?.length || 0} players`,
+            ),
+          );
+
+          const teams = node("div", "teams");
+          for (const team of match.teams || []) {
+            const teamElement = node("section", "team");
+            teamElement.append(node("div", "team-side", team.side || "team"));
+            teamElement.append(node("h4", "", team.name));
+            if (team.logoUrl) {
+              const logo = node("a", "logo-link", "Team logo URL");
+              logo.href = team.logoUrl;
+              logo.target = "_blank";
+              logo.rel = "noreferrer";
+              teamElement.append(logo);
+            }
+
+            const groups = node("div", "lineup-groups");
+            for (const [key, label] of [
+              ["starting", "Starting"],
+              ["bench", "Bench"],
+              ["out", "Out"],
+            ]) {
+              const group = node("section", "group");
+              group.append(node("h5", "", label));
+              const players = node("ul", "players");
+              const entries = team.lineup?.[key] || [];
+              for (const player of entries) {
+                const row = node("li", "player");
+                row.append(node("span", "", player.name));
+                if (player.displayedLabel) {
+                  row.append(node("span", "percentage", player.displayedLabel));
+                }
+                players.append(row);
+              }
+              if (entries.length === 0) {
+                players.append(node("li", "empty", "None shown"));
+              }
+              group.append(players);
+              groups.append(group);
+            }
+            teamElement.append(groups);
+
+            const notes = node("div", "notes");
+            for (const key of [
+              "teamAnalysis",
+              "injuriesAndRecovery",
+              "suspensionsAndIneligibilities",
+            ]) {
+              const block = team.notes?.[key];
+              if (!block) continue;
+              const note = node("section", "note");
+              note.append(node("h5", "", block.label));
+              note.append(node("p", "", block.text));
+              notes.append(note);
+            }
+            teamElement.append(notes);
+            if (team.author) {
+              teamElement.append(node("p", "author", `Prediction author: ${team.author}`));
+            }
+            teams.append(teamElement);
+          }
+          if (!match.teams?.length) {
+            teams.append(node("p", "empty", "No visible team predictions were extracted."));
+          }
+          matchElement.append(teams);
+          result.append(matchElement);
+        }
+      }
+
+      async function refreshStatus() {
+        try {
+          const status = await request("/api/status");
+          state.textContent = status.state.replace("-", " ");
+          state.className = `badge ${status.state}`;
+          message.textContent = status.message;
+          currentUrl.textContent = status.currentUrl || "";
+          progress.max = Math.max(status.total, 1);
+          progress.value = status.completed;
+          continueButton.hidden = status.state !== "waiting-login";
+          if (status.state === "publishing" || /^Published /.test(status.message)) {
+            publishStatus.textContent = status.message;
+          }
+          if (status.downloadReady) await loadResult(status.outputPath);
+          updatePublishControls(status);
+        } catch (error) {
+          message.textContent = error.message;
+          state.textContent = "error";
+          state.className = "badge failed";
+        }
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        resultLoaded = false;
+        resultCard.hidden = true;
+        const values = textareaUrls();
+        try {
+          const scope = selectedScope();
+          await request("/api/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              urls: values,
+              diagnostic: diagnostic.checked,
+              screenshot: screenshot.checked,
+              ...(scope ? { tour: scope.tour } : {}),
+            }),
+          });
+          await refreshStatus();
+        } catch (error) {
+          message.textContent = error.message;
+          state.textContent = "error";
+          state.className = "badge failed";
+        }
+      });
+
+      shotMode.addEventListener("change", () => {
+        shotCoords.style.display = shotMode.value === "coords" ? "grid" : "none";
+      });
+
+      takeScreenshot.addEventListener("click", async () => {
+        const url =
+          shotUrl.value.trim() ||
+          textareaUrls()[0] ||
+          "";
+        if (!url) {
+          shotStatus.textContent = "Paste an Expected11 match URL first.";
+          return;
+        }
+        const scope = selectedScope();
+        if (!scope) {
+          shotStatus.textContent = "Select Championship and Tour first (files save as tour/club.png).";
+          leagueSelect.focus();
+          return;
+        }
+        const payload = { mode: shotMode.value, url, tour: scope.tour };
+        if (shotMode.value === "coords") {
+          payload.clip = {
+            x: Number(shotX.value),
+            y: Number(shotY.value),
+            width: Number(shotW.value),
+            height: Number(shotH.value),
+          };
+        }
+        takeScreenshot.disabled = true;
+        shotStatus.textContent = "Capturing… (close other Expected11 Chrome windows if the profile is locked)";
+        try {
+          const result = await request("/api/screenshot", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const files = (result.files || [])
+            .map((f) => f.relativePath || f.path)
+            .join(" · ");
+          shotStatus.textContent = result.files?.length
+            ? `Saved ${result.files.length} file(s) as tour ${scope.tour}/{club}.png → ${result.outputDir}`
+            : "No files saved.";
+          if (files) shotStatus.textContent += `\n${files}`;
+        } catch (error) {
+          shotStatus.textContent = error.message;
+        } finally {
+          takeScreenshot.disabled = false;
+        }
+      });
+
+      saveLinks.addEventListener("click", async () => {
+        const scope = selectedScope();
+        if (!scope) {
+          savedHint.textContent = "Select Championship and Tour before saving links.";
+          leagueSelect.focus();
+          return;
+        }
+        try {
+          const saved = await request("/api/saved-urls", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...scope, urls: textareaUrls() }),
+          });
+          urls.value = (saved.urls || []).join("\n");
+          updateSavedHint((saved.urls || []).length, scope);
+          message.textContent = saved.urls.length
+            ? `Saved ${saved.urls.length} link(s) for ${scope.league} tour ${scope.tour}. Parser was not started.`
+            : `Cleared saved links for ${scope.league} tour ${scope.tour}.`;
+        } catch (error) {
+          savedHint.textContent = error.message;
+          message.textContent = error.message;
+        }
+      });
+
+      rebuildPublish.addEventListener("click", async () => {
+        const scope = selectedScope();
+        if (!scope) {
+          if (lastStatus) updatePublishControls(lastStatus);
+          message.textContent = "Select a championship and tour first.";
+          leagueSelect.focus();
+          return;
+        }
+        resultLoaded = false;
+        resultCard.hidden = true;
+        publishStatus.textContent = "";
+        const values = textareaUrls();
+        try {
+          await request("/api/rebuild-and-publish", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...scope,
+              diagnostic: diagnostic.checked,
+              screenshot: screenshot.checked,
+              ...(values.length ? { urls: values } : {}),
+            }),
+          });
+          if (values.length) updateSavedHint(values.length, scope);
+          await refreshStatus();
+        } catch (error) {
+          message.textContent = error.message;
+          state.textContent = "error";
+          state.className = "badge failed";
+        }
+      });
+
+      continueButton.addEventListener("click", async () => {
+        try {
+          await request("/api/continue", { method: "POST" });
+          await refreshStatus();
+        } catch (error) {
+          message.textContent = error.message;
+        }
+      });
+
+      publishButton.addEventListener("click", async () => {
+        const scope = selectedScope();
+        if (!scope) {
+          if (lastStatus) updatePublishControls(lastStatus);
+          publishStatus.textContent = "Select a championship and tour before publishing.";
+          leagueSelect.focus();
+          return;
+        }
+        publishing = true;
+        publishButton.disabled = true;
+        publishStatus.textContent =
+          `Publishing ${scope.league} tour ${scope.tour} to mantra.panenka.games…`;
+        try {
+          const imported = await request("/api/publish", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(scope),
+          });
+          const bound = imported.league && imported.tour != null
+            ? `${imported.league} tour ${imported.tour}: `
+            : "";
+          const skipped = Array.isArray(imported.skipped) ? imported.skipped.length : 0;
+          publishStatus.textContent =
+            `Published ${bound}snapshot input: ${imported.importedMatches} matches, ` +
+            `${imported.importedTeams} team rows, ${imported.importedPlayers} player rows · ` +
+            `persisted: linked ${imported.linked}, ` +
+            `unmatched ${imported.unmatched}, ambiguous ${imported.ambiguous}` +
+            (skipped ? ` · skipped stubs ${skipped}` : "") +
+            (imported.unmatched > 0 || imported.ambiguous > 0
+              ? " · Fix names on production Mapping (admin): /mapping"
+              : "");
+        } catch (error) {
+          publishStatus.textContent = error.message;
+        } finally {
+          publishing = false;
+          if (lastStatus) updatePublishControls(lastStatus);
+        }
+      });
+
+      loadCatalog()
+        .then(() => {
+          if (lastStatus) updatePublishControls(lastStatus);
+        })
+        .catch((error) => {
+          message.textContent = error.message;
+        });
+      refreshStatus();
+      setInterval(refreshStatus, 1000);
+
+      // --- SorareInside tab ---
+      const sorareForm = document.querySelector("#sorare-form");
+      const sorareUrl = document.querySelector("#sorare-url");
+      const sorareDiscover = document.querySelector("#sorare-discover");
+      const sorareExpand = document.querySelector("#sorare-expand");
+      const sorareState = document.querySelector("#sorare-state");
+      const sorareMessage = document.querySelector("#sorare-message");
+      const sorareCurrentUrl = document.querySelector("#sorare-current-url");
+      const sorareContinue = document.querySelector("#sorare-continue");
+      const sorareLeaguesCard = document.querySelector("#sorare-leagues-card");
+      const sorareLeagues = document.querySelector("#sorare-leagues");
+      const sorareLeaguesHint = document.querySelector("#sorare-leagues-hint");
+      const sorareMatchesCard = document.querySelector("#sorare-matches-card");
+      const sorareMatches = document.querySelector("#sorare-matches");
+      const sorareMatchesHint = document.querySelector("#sorare-matches-hint");
+      const sorareCaptureStatus = document.querySelector("#sorare-capture-status");
+      const sorarePublish = document.querySelector("#sorare-publish");
+      const sorarePublishHint = document.querySelector("#sorare-publish-hint");
+      const sorareOutputDir = document.querySelector("#sorare-output-dir");
+      const sorarePickFolder = document.querySelector("#sorare-pick-folder");
+      const SORARE_OUTPUT_DIR_KEY = "sorare-output-dir";
+      let sorareLeagueRows = new Map();
+      let sorareLastState = "idle";
+      let sorareRoundByLeague = new Map();
+      let sorarePublishConfigured = false;
+      let sorareCapturedDone = 0;
+      let sorareCapturedTotal = 0;
+      let sorareOutputDisplay = "data/sorare/output";
+      let lastPostedOutputDir = "";
+
+      function mantraSlugFromSorareLabel(label) {
+        const l = String(label || "").toLowerCase();
+        if (l.includes("premier league")) return "premier-league";
+        if (l.includes("championship")) return "championship";
+        if (l.includes("serie a")) return "serie-a";
+        if (l.includes("bundesliga")) return "bundesliga";
+        if (l.includes("la liga")) return "la-liga";
+        if (l.includes("ligue 1")) return "ligue-1";
+        if (l.includes("süper") || l.includes("super lig")) return "super-lig";
+        if (l.includes("ekstraklasa")) return "ekstraklasa";
+        return null;
+      }
+
+      function applySorareOutputDir(status) {
+        const shown = status?.outputRootAbs || status?.outputRoot;
+        if (!shown) return;
+        sorareOutputDisplay = status.outputRoot || shown;
+        lastPostedOutputDir = shown;
+        try {
+          localStorage.setItem(SORARE_OUTPUT_DIR_KEY, shown);
+        } catch (_) {}
+        if (document.activeElement !== sorareOutputDir) {
+          sorareOutputDir.value = shown;
+        }
+      }
+
+      async function persistSorareOutputDir() {
+        const value = sorareOutputDir.value.trim();
+        if (!value || value === lastPostedOutputDir) return;
+        const data = await request("/api/sorare/output-dir", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ outputDir: value }),
+        });
+        applySorareOutputDir(data);
+      }
+
+      function selectedSorareLeagues() {
+        const leagues = [];
+        for (const [id, row] of sorareLeagueRows) {
+          const checked = row.querySelector('input[type="checkbox"]');
+          const roundInput = row.querySelector('input[type="number"]');
+          if (!checked?.checked) continue;
+          const round = Number(roundInput?.value);
+          const label =
+            row.querySelector(".league-label")?.textContent?.trim() || id;
+          leagues.push({ id, round, label });
+          sorareRoundByLeague.set(id, round);
+        }
+        return leagues;
+      }
+
+      function renderSorareLeagues(leagues) {
+        // Preserve checks + rounds across re-renders (capture flips ready→running→ready).
+        const previouslyChecked = new Set();
+        for (const [id, row] of sorareLeagueRows) {
+          const check = row.querySelector('input[type="checkbox"]');
+          const roundInput = row.querySelector('input[type="number"]');
+          if (check?.checked) previouslyChecked.add(id);
+          const round = Number(roundInput?.value);
+          if (Number.isInteger(round) && round >= 1) {
+            sorareRoundByLeague.set(id, round);
+          }
+        }
+
+        sorareLeagueRows = new Map();
+        sorareLeagues.replaceChildren();
+        if (!leagues?.length) {
+          sorareLeaguesCard.hidden = true;
+          sorareExpand.disabled = true;
+          return;
+        }
+        sorareLeaguesCard.hidden = false;
+        sorareLeaguesHint.textContent =
+          `${leagues.length} tournament/league types. Check leagues and set round/tour for screenshot folders.`;
+        for (const league of leagues) {
+          const row = document.createElement("div");
+          row.className = "league-row";
+          row.dataset.leagueId = league.id;
+          const checkLabel = document.createElement("label");
+          checkLabel.className = "checkbox";
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.value = league.id;
+          checkbox.checked = previouslyChecked.has(league.id);
+          checkLabel.append(checkbox, document.createTextNode(" "));
+          const labelSpan = document.createElement("span");
+          labelSpan.className = "league-label";
+          labelSpan.textContent = league.label;
+          checkLabel.append(labelSpan);
+          const meta = document.createElement("span");
+          meta.className = "muted";
+          meta.textContent = `${league.gameCount} games · ${league.lineupCount} lineups`;
+          const roundInput = document.createElement("input");
+          roundInput.type = "number";
+          roundInput.min = "1";
+          roundInput.max = "99";
+          roundInput.value = String(sorareRoundByLeague.get(league.id) || 1);
+          roundInput.title = "Round / tour number";
+          roundInput.setAttribute("aria-label", `Round for ${league.label}`);
+          row.append(checkLabel, meta, roundInput);
+          sorareLeagues.append(row);
+          sorareLeagueRows.set(league.id, row);
+        }
+        sorareExpand.disabled = false;
+      }
+
+      function clubFileSlug(teamName) {
+        const cleaned = String(teamName || "")
+          .normalize("NFKD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .trim()
+          .replace(/\s+(fc|afc|cf|sc)\.?$/i, "")
+          .replace(/&/g, " and ");
+        return cleaned
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .replace(/-{2,}/g, "-");
+      }
+
+      async function loadSorareCaptured(round) {
+        if (!Number.isInteger(round) || round < 1) return {};
+        try {
+          const data = await request(`/api/sorare/captured?round=${round}`);
+          return data.bySlug || {};
+        } catch {
+          return {};
+        }
+      }
+
+      async function renderSorareMatches(matches, leaguesMeta) {
+        sorareMatches.replaceChildren();
+        if (!matches?.length) {
+          sorareMatchesCard.hidden = true;
+          return;
+        }
+        sorareMatchesCard.hidden = false;
+        const roundHint = (leaguesMeta || [])
+          .map((l) => `${l.label}: round ${l.round}`)
+          .join(" · ");
+        const rounds = [
+          ...new Set(
+            (leaguesMeta || [])
+              .map((l) => Number(l.round))
+              .filter((n) => Number.isInteger(n) && n >= 1),
+          ),
+        ];
+        const capturedByRound = new Map();
+        await Promise.all(
+          rounds.map(async (round) => {
+            capturedByRound.set(round, await loadSorareCaptured(round));
+          }),
+        );
+        let done = 0;
+        let total = 0;
+        for (const match of matches) {
+          for (const side of ["home", "away"]) {
+            const team = match[side];
+            if (!team?.lineupId) continue;
+            total += 1;
+            const round =
+              sorareRoundByLeague.get(match.leagueId) ||
+              Number(
+                sorareLeagueRows
+                  .get(match.leagueId)
+                  ?.querySelector('input[type="number"]')?.value,
+              );
+            const slug = clubFileSlug(team.teamName);
+            const info = capturedByRound.get(round)?.[slug];
+            if (info?.json || info?.png) done += 1;
+          }
+        }
+        sorareMatchesHint.textContent =
+          `${matches.length} matches · captured ${done}/${total} sides on disk.` +
+          ` Home/Away: green ✓ = already saved under ${sorareOutputDisplay}/{round}/.` +
+          ` Then use «Залить JSON на прод» to push % into Premium футмопс.` +
+          (roundHint ? ` (${roundHint})` : "");
+        sorareCapturedDone = done;
+        sorareCapturedTotal = total;
+        for (const match of matches) {
+          const row = document.createElement("div");
+          row.className = "match-row";
+          const title = document.createElement("div");
+          const name = document.createElement("div");
+          name.textContent = `${match.home.teamName} vs ${match.away.teamName}`;
+          const meta = document.createElement("div");
+          meta.className = "muted";
+          meta.textContent =
+            match.leagueLabel + (match.date ? ` · ${match.date}` : "");
+          title.append(name, meta);
+          const round =
+            sorareRoundByLeague.get(match.leagueId) ||
+            Number(
+              sorareLeagueRows
+                .get(match.leagueId)
+                ?.querySelector('input[type="number"]')?.value,
+            );
+          const bySlug = capturedByRound.get(round) || {};
+
+          const makeSideBtn = (side) => {
+            const team = match[side];
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "side secondary";
+            const slug = clubFileSlug(team.teamName);
+            const info = bySlug[slug];
+            const saved = Boolean(info?.json || info?.png);
+            const label = side === "home" ? "Home" : "Away";
+            btn.textContent = saved
+              ? `${label} ✓${info?.probabilities != null ? ` (${info.probabilities})` : ""}`
+              : label;
+            btn.classList.add(saved ? "captured" : "missing");
+            btn.disabled = !team.lineupId;
+            btn.title = !team.lineupId
+              ? "No lineup"
+              : saved
+                ? `Already saved: ${round}/${slug} · click to re-capture`
+                : `Screenshot ${team.teamName}`;
+            btn.dataset.side = side;
+            btn.dataset.sideLabel = label;
+            btn.dataset.saved = saved ? "1" : "0";
+            btn.addEventListener("click", () => captureSorareSide(match, side, btn));
+            return btn;
+          };
+
+          row.append(title, makeSideBtn("home"), makeSideBtn("away"));
+          sorareMatches.append(row);
+        }
+      }
+
+      function markSorareSideCaptured(btn, info) {
+        const label = btn.dataset.sideLabel || "Side";
+        const n = info?.probabilities;
+        btn.textContent =
+          `${label} ✓` + (n != null ? ` (${n})` : "");
+        btn.classList.add("captured");
+        btn.classList.remove("missing");
+        const roundHint = sorareMatchesHint.textContent.match(/ \(.*\)$/)?.[0] || "";
+        if (btn.dataset.saved !== "1") {
+          sorareCapturedDone += 1;
+          btn.dataset.saved = "1";
+        }
+        const matchCount = sorareMatches.querySelectorAll(".match-row").length;
+        sorareMatchesHint.textContent =
+          `${matchCount} matches · captured ${sorareCapturedDone}/${sorareCapturedTotal} sides on disk.` +
+          ` Home/Away: green ✓ = already saved under ${sorareOutputDisplay}/{round}/.` +
+          ` Then use «Залить JSON на прод» to push % into Premium футмопс.` +
+          roundHint;
+      }
+
+      async function captureSorareSide(match, side, btn) {
+        const team = side === "home" ? match.home : match.away;
+        const round =
+          sorareRoundByLeague.get(match.leagueId) ||
+          Number(
+            sorareLeagueRows
+              .get(match.leagueId)
+              ?.querySelector('input[type="number"]')?.value,
+          );
+        if (!Number.isInteger(round) || round < 1) {
+          sorareCaptureStatus.textContent =
+            "Set a valid round (1–99) next to the league first.";
+          return;
+        }
+        try {
+          await persistSorareOutputDir();
+        } catch (error) {
+          sorareCaptureStatus.textContent = error.message;
+          return;
+        }
+        sorareCaptureStatus.textContent = `Capturing ${team.teamName} → ${sorareOutputDisplay}/${round}/…`;
+        try {
+          const result = await request("/api/sorare/capture", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              gameId: match.gameId,
+              side,
+              round,
+              teamName: team.teamName,
+              lineupId: team.lineupId,
+            }),
+          });
+          const file = result.file?.relativePath || "";
+          const green = result.file?.greenRelativePath || "";
+          const n = result.probabilities?.length || 0;
+          const folder = result.outputRoot || sorareOutputDisplay;
+          if (result.outputRoot || result.outputRootAbs) applySorareOutputDir(result);
+          sorareCaptureStatus.textContent =
+            `Saved ${folder}/${file}` +
+            (green ? ` + ${green}` : "") +
+            (n ? ` · ${n} player probabilities in sidecar JSON` : "") +
+            ` · local only until «Залить JSON на прод»`;
+          if (btn) markSorareSideCaptured(btn, { probabilities: n || null });
+        } catch (error) {
+          sorareCaptureStatus.textContent = error.message;
+        }
+      }
+
+      async function refreshSorareStatus() {
+        try {
+          const status = await request("/api/sorare/status");
+          sorareState.textContent = status.state.replace("-", " ");
+          sorareState.className = `badge ${status.state}`;
+          sorareMessage.textContent = status.message;
+          sorareCurrentUrl.textContent = status.currentUrl || status.lineupsUrl || "";
+          sorareContinue.hidden = status.state !== "waiting-login";
+          sorarePublishConfigured = Boolean(status.publishConfigured);
+          sorarePublish.disabled = !sorarePublishConfigured;
+          applySorareOutputDir(status);
+          if (!sorarePublishConfigured) {
+            sorarePublishHint.textContent =
+              "Publish disabled: set EXPECTED11_IMPORT_TOKEN in .env, then restart this UI. " +
+              "Prod also needs /api/footmops/import deployed.";
+          }
+          const busy =
+            status.state === "running" || status.state === "waiting-login";
+          sorareDiscover.disabled = busy;
+          if (
+            status.state === "ready" &&
+            status.leagueCount > 0 &&
+            sorareLastState !== "ready" &&
+            sorareMatchesCard.hidden
+          ) {
+            const data = await request("/api/sorare/leagues");
+            renderSorareLeagues(data.leagues || []);
+          }
+          sorareLastState = status.state;
+        } catch (error) {
+          sorareMessage.textContent = error.message;
+          sorareState.textContent = "error";
+          sorareState.className = "badge failed";
+        }
+      }
+
+      sorareForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        sorareMatchesCard.hidden = true;
+        try {
+          await request("/api/sorare/discover", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: sorareUrl.value.trim() }),
+          });
+          await refreshSorareStatus();
+        } catch (error) {
+          sorareMessage.textContent = error.message;
+          sorareState.textContent = "error";
+          sorareState.className = "badge failed";
+        }
+      });
+
+      sorareExpand.addEventListener("click", async () => {
+        const leagues = selectedSorareLeagues();
+        if (!leagues.length) {
+          sorareMatchesHint.textContent = "Check at least one league.";
+          sorareMatchesCard.hidden = false;
+          sorareMatches.replaceChildren();
+          return;
+        }
+        try {
+          await persistSorareOutputDir();
+          const result = await request("/api/sorare/expand", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ leagues }),
+          });
+          for (const entry of leagues) {
+            sorareRoundByLeague.set(entry.id, entry.round);
+          }
+          await renderSorareMatches(result.matches || [], result.leagues || []);
+          sorareMessage.textContent = result.status?.message || "Expanded.";
+        } catch (error) {
+          sorareCaptureStatus.textContent = error.message;
+        }
+      });
+
+      sorareContinue.addEventListener("click", async () => {
+        try {
+          await request("/api/sorare/continue", { method: "POST" });
+          await refreshSorareStatus();
+        } catch (error) {
+          sorareMessage.textContent = error.message;
+        }
+      });
+
+      sorarePublish.addEventListener("click", async () => {
+        const selected = selectedSorareLeagues();
+        if (!selected.length) {
+          sorareCaptureStatus.textContent =
+            "Check at least one league (with round) before publishing.";
+          return;
+        }
+        const scopes = [];
+        for (const entry of selected) {
+          const league = mantraSlugFromSorareLabel(entry.label);
+          if (!league) {
+            sorareCaptureStatus.textContent =
+              `Cannot map league «${entry.label}» to a mantra slug.`;
+            return;
+          }
+          if (!Number.isInteger(entry.round) || entry.round < 1) {
+            sorareCaptureStatus.textContent =
+              `Set a valid round (1–99) for ${entry.label}.`;
+            return;
+          }
+          scopes.push({ league, tour: entry.round, leagueLabel: entry.label });
+        }
+        sorarePublish.disabled = true;
+        sorareCaptureStatus.textContent =
+          `Publishing ${scopes.map((s) => `${s.league} t${s.tour}`).join(", ")} → production footmops…`;
+        try {
+          const result = await request("/api/sorare/publish", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ scopes }),
+          });
+          const t = result.totals || {};
+          sorareCaptureStatus.textContent =
+            (result.message || "Published.") +
+            (t.unmatched
+              ? ` · unmatched sample in Mapping UI on prod`
+              : "");
+          if (Array.isArray(result.results)) {
+            const detail = result.results
+              .map(
+                (row) =>
+                  `${row.league} t${row.tour}: clubs=${row.clubs ?? row.clubsLocal ?? "?"} players=${row.players ?? "?"} linked=${row.linked ?? "?"} unmatched=${row.unmatched ?? "?"}`,
+              )
+              .join(" · ");
+            if (detail) sorareCaptureStatus.textContent += ` · ${detail}`;
+          }
+        } catch (error) {
+          sorareCaptureStatus.textContent = error.message;
+        } finally {
+          sorarePublish.disabled = !sorarePublishConfigured;
+        }
+      });
+
+      sorareOutputDir.addEventListener("change", () => {
+        persistSorareOutputDir().catch((error) => {
+          sorareCaptureStatus.textContent = error.message;
+        });
+      });
+      sorarePickFolder.addEventListener("click", async () => {
+        try {
+          const data = await request("/api/sorare/pick-folder", { method: "POST" });
+          applySorareOutputDir(data);
+          sorareCaptureStatus.textContent =
+            `Screenshots will save to ${data.outputRootAbs || data.outputRoot}`;
+        } catch (error) {
+          sorareCaptureStatus.textContent = error.message;
+        }
+      });
+      try {
+        const saved = localStorage.getItem(SORARE_OUTPUT_DIR_KEY);
+        if (saved) {
+          sorareOutputDir.value = saved;
+          sorareOutputDisplay = saved;
+        }
+      } catch (_) {}
+
+      setInterval(() => {
+        if (!panelSorare.hidden) refreshSorareStatus();
+      }, 1000);
+    </script>
+  </body>
+</html>

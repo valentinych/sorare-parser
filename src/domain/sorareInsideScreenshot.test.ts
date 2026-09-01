@@ -1,0 +1,265 @@
+import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+import {
+  clubFileSlug,
+  isSorareInsideGamesApiUrl,
+  leagueLabel,
+  listSorareCapturedClubs,
+  mergeSorareInsideProbabilities,
+  parseBenchAndDnpPlayerLists,
+  parseProbabilitiesFromModalText,
+  parseSorareInsideCaptureRequest,
+  parseSorareInsideDiscoverRequest,
+  parseSorareInsideExpandRequest,
+  parseSorareInsideGamesPayload,
+  parseSorareInsideGwSlug,
+  parseSorareInsideLineupsUrl,
+  sorareTourClubGreenScreenshotPath,
+  sorareTourClubScreenshotPath,
+} from "./sorareInsideScreenshot.js";
+
+test("parseSorareInsideLineupsUrl accepts full URL and bare slug", () => {
+  const fromUrl = parseSorareInsideLineupsUrl(
+    "https://sorareinside.com/lineups?gwSlug=football-28-aug-1-sep-2026&foo=1",
+  );
+  assert.equal(fromUrl.gwSlug, "football-28-aug-1-sep-2026");
+  assert.equal(
+    fromUrl.url,
+    "https://sorareinside.com/lineups?gwSlug=football-28-aug-1-sep-2026",
+  );
+
+  const fromSlug = parseSorareInsideLineupsUrl("football-28-aug-1-sep-2026");
+  assert.equal(fromSlug.gwSlug, "football-28-aug-1-sep-2026");
+  assert.match(fromSlug.url, /gwSlug=football-28-aug-1-sep-2026/);
+});
+
+test("parseSorareInsideGwSlug rejects junk", () => {
+  assert.throws(() => parseSorareInsideGwSlug(""), /non-empty/);
+  assert.throws(() => parseSorareInsideGwSlug("bad slug!"), /Invalid/);
+});
+
+test("parseSorareInsideDiscoverRequest requires url or gwSlug", () => {
+  assert.equal(
+    parseSorareInsideDiscoverRequest({ gwSlug: "football-28-aug-1-sep-2026" }).gwSlug,
+    "football-28-aug-1-sep-2026",
+  );
+  assert.throws(() => parseSorareInsideDiscoverRequest({}), /url|gwSlug/);
+});
+
+test("parseSorareInsideExpandRequest validates rounds", () => {
+  const parsed = parseSorareInsideExpandRequest({
+    leagues: [
+      { id: "liga-pro", round: 3 },
+      { id: "liga-pro", round: 4 },
+      { id: "bundesliga", round: "2" },
+    ],
+  });
+  assert.deepEqual(parsed.leagues, [
+    { id: "liga-pro", round: 3 },
+    { id: "bundesliga", round: 2 },
+  ]);
+  assert.throws(
+    () => parseSorareInsideExpandRequest({ leagues: [{ id: "x" }] }),
+    /round/,
+  );
+});
+
+test("parseSorareInsideCaptureRequest + path helpers", () => {
+  const req = parseSorareInsideCaptureRequest({
+    gameId: "g1",
+    side: "home",
+    round: 3,
+    teamName: "Millwall FC",
+  });
+  assert.equal(req.round, 3);
+  assert.equal(clubFileSlug(req.teamName!), "millwall");
+  assert.equal(sorareTourClubScreenshotPath(3, "Millwall FC"), "3/millwall.png");
+  assert.equal(
+    sorareTourClubGreenScreenshotPath(3, "Millwall FC"),
+    "3/millwall-green.png",
+  );
+});
+
+test("leagueLabel formats region - competition", () => {
+  assert.equal(
+    leagueLabel("Argentina", "Liga Professional Argentina"),
+    "Argentina - Liga Professional Argentina",
+  );
+  assert.equal(leagueLabel("England", "England Premier League"), "England Premier League");
+});
+
+test("parseSorareInsideGamesPayload flattens regions", () => {
+  const { leagues, matches } = parseSorareInsideGamesPayload({
+    data: [
+      {
+        regionCode: "AR",
+        regionName: "Argentina",
+        competitions: [
+          {
+            id: "liga-pro",
+            name: "Liga Professional Argentina",
+            games: [
+              {
+                id: "game-1",
+                date: "2026-08-29T00:00:00.000Z",
+                homeTeam: { name: "Boca Juniors", slug: "boca-juniors" },
+                awayTeam: { name: "River Plate", slug: "river-plate" },
+                homeTeamLineup: { id: "lu-home" },
+                awayTeamLineup: { id: null },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  assert.equal(leagues.length, 1);
+  assert.equal(leagues[0].label, "Argentina - Liga Professional Argentina");
+  assert.equal(leagues[0].lineupCount, 1);
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].home.lineupId, "lu-home");
+  assert.equal(matches[0].away.lineupId, null);
+});
+
+test("isSorareInsideGamesApiUrl", () => {
+  assert.equal(
+    isSorareInsideGamesApiUrl(
+      "https://platform-api.sorareinside.com/games?gameweekSlug=football-28-aug-1-sep-2026",
+    ),
+    true,
+  );
+  assert.equal(
+    isSorareInsideGamesApiUrl("https://platform-api.sorareinside.com/lineups"),
+    false,
+  );
+});
+
+test("parseProbabilitiesFromModalText extracts player percentages", () => {
+  const players = parseProbabilitiesFromModalText(`
+Boca Juniors
+Marcos Rojo 75%
+Edinson Cavani 90%
+Some note without percent
+Foo 101%
+`);
+  assert.deepEqual(
+    players.map((p) => [p.name, p.percentage]),
+    [
+      ["Marcos Rojo", 75],
+      ["Edinson Cavani", 90],
+    ],
+  );
+});
+
+test("parseProbabilitiesFromModalText accepts name and % on adjacent lines", () => {
+  const players = parseProbabilitiesFromModalText(`
+Starting XI
+Cole Palmer
+85%
+Nicolas Jackson
+60%
+Comments
+`);
+  assert.deepEqual(
+    players.map((p) => [p.name, p.percentage]),
+    [
+      ["Cole Palmer", 85],
+      ["Nicolas Jackson", 60],
+    ],
+  );
+});
+
+test("parseBenchAndDnpPlayerLists defaults bench to 10% and DNP to out", () => {
+  const players = parseBenchAndDnpPlayerLists(`
+Bench Players
+Dermot Mee
+Thomas Heaton 25%
+Joshua Zirkzee
+DNP Players
+Manuel Ugarte
+Amad Diallo
+Comments
+`);
+  assert.deepEqual(
+    players.map((p) => [p.name, p.percentage, p.rawLabel, p.group]),
+    [
+      ["Dermot Mee", 10, "10%", "bench"],
+      ["Thomas Heaton", 25, "Thomas Heaton 25%", "bench"],
+      ["Joshua Zirkzee", 10, "10%", "bench"],
+      ["Manuel Ugarte", null, "out", "out"],
+      ["Amad Diallo", null, "out", "out"],
+    ],
+  );
+});
+
+test("listSorareCapturedClubs reads png/json from tour folder", () => {
+  const root = mkdtempSync(join(tmpdir(), "sorare-cap-"));
+  const tourDir = join(root, "2");
+  mkdirSync(tourDir, { recursive: true });
+  writeFileSync(join(tourDir, "southampton.png"), "x");
+  writeFileSync(join(tourDir, "southampton-green.png"), "x");
+  writeFileSync(
+    join(tourDir, "southampton.json"),
+    JSON.stringify({
+      capturedAt: "2026-08-28T12:00:00.000Z",
+      probabilities: [{ name: "A", percentage: 80 }],
+    }),
+  );
+  const clubs = listSorareCapturedClubs(root, 2);
+  assert.equal(clubs.length, 1);
+  assert.deepEqual(clubs[0], {
+    clubSlug: "southampton",
+    png: true,
+    green: true,
+    json: true,
+    probabilities: 1,
+    capturedAt: "2026-08-28T12:00:00.000Z",
+  });
+  assert.deepEqual(listSorareCapturedClubs(root, 9), []);
+});
+
+test("mergeSorareInsideProbabilities prefers pitch names over bench/dnp", () => {
+  const merged = mergeSorareInsideProbabilities(
+    [{ name: "Bruno Fernandes", percentage: 90, rawLabel: "90%", group: "starting" }],
+    [
+      { name: "Bruno Fernandes", percentage: 10, rawLabel: "10%", group: "bench" },
+      { name: "Joshua Zirkzee", percentage: 10, rawLabel: "10%", group: "bench" },
+      { name: "Amad Diallo", percentage: null, rawLabel: "out", group: "out" },
+    ],
+  );
+  assert.deepEqual(
+    merged.map((p) => [p.name, p.percentage, p.group]),
+    [
+      ["Bruno Fernandes", 90, "starting"],
+      ["Joshua Zirkzee", 10, "bench"],
+      ["Amad Diallo", null, "out"],
+    ],
+  );
+});
+
+test("parseSorareOutputDir resolves relative and absolute folders", async () => {
+  const {
+    displaySorareOutputDir,
+    loadSorareOutputDirConfig,
+    parseSorareOutputDir,
+    saveSorareOutputDirConfig,
+  } = await import("./sorareInsideScreenshot.js");
+  const root = mkdtempSync(join(tmpdir(), "sorare-out-"));
+  assert.equal(
+    parseSorareOutputDir("data/sorare/output", root),
+    join(root, "data/sorare/output"),
+  );
+  const abs = join(root, "shots");
+  assert.equal(parseSorareOutputDir(abs, root), abs);
+  assert.throws(() => parseSorareOutputDir("  ", root), /outputDir/);
+  assert.equal(
+    displaySorareOutputDir(join(root, "data/sorare/output"), root),
+    "data/sorare/output",
+  );
+  assert.equal(loadSorareOutputDirConfig(root), null);
+  saveSorareOutputDirConfig(root, abs);
+  assert.equal(loadSorareOutputDirConfig(root), abs);
+});
