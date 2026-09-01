@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   clubFileSlug,
   isSorareInsideGamesApiUrl,
+  lineupTeamLabelsMatch,
   leagueLabel,
   listSorareCapturedClubs,
   mergeSorareInsideProbabilities,
@@ -65,6 +66,16 @@ test("parseSorareInsideExpandRequest validates rounds", () => {
     () => parseSorareInsideExpandRequest({ leagues: [{ id: "x" }] }),
     /round/,
   );
+});
+
+test("lineupTeamLabelsMatch treats FC suffix and ellipsis as the same club", () => {
+  assert.equal(lineupTeamLabelsMatch("Middlesbrough", "Middlesbrough FC"), true);
+  assert.equal(lineupTeamLabelsMatch("Middlesbrough FC", "Middlesbrough"), true);
+  assert.equal(lineupTeamLabelsMatch("Middlesbrough…", "Middlesbrough FC"), true);
+  assert.equal(lineupTeamLabelsMatch("Middlesbrough...", "Middlesbrough FC"), true);
+  assert.equal(lineupTeamLabelsMatch("Millwall FC", "Millwall"), true);
+  assert.equal(lineupTeamLabelsMatch("Blackburn Rovers", "Middlesbrough FC"), false);
+  assert.equal(lineupTeamLabelsMatch("Manchester", "Manchester City"), false);
 });
 
 test("parseSorareInsideCaptureRequest + path helpers", () => {

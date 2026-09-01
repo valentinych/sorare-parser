@@ -42,10 +42,26 @@ test("SorareInside session scrolls the lineups page before capture", async () =>
   assert.doesNotMatch(src, /\[role='progressbar'\]/);
   assert.doesNotMatch(src, /Timed out after 90s/);
   const captureStart = src.indexOf("async capture(body: unknown)");
-  const captureEnd = src.indexOf("function escapeRegExp");
+  const captureEnd = src.indexOf("let sharedSession");
   assert.ok(captureStart > 0 && captureEnd > captureStart);
   const captureFn = src.slice(captureStart, captureEnd);
   assert.match(captureFn, /expandLeagueAccordion/);
   assert.match(captureFn, /scrollToLoadLazyContent/);
   assert.match(captureFn, /untilText: teamName/);
+});
+
+test("SorareInside capture clicks the lineups club card, not the combobox", async () => {
+  const src = await readFile(
+    new URL("../sync/sorareInsideLineups.ts", import.meta.url),
+    "utf8",
+  );
+  const clickStart = src.indexOf("private async clickTeamToOpenPopup");
+  const clickEnd = src.indexOf("private async expandLeagueAccordion");
+  assert.ok(clickStart > 0 && clickEnd > clickStart);
+  const clickFn = src.slice(clickStart, clickEnd);
+  assert.match(src, /LINEUP_TEAM_LABELS_MATCH_SOURCE/);
+  assert.match(clickFn, /lineupsTeamCardPresent/);
+  assert.match(clickFn, /No clickable "\$\{teamName\}" club on the lineups list/);
+  assert.doesNotMatch(clickFn, /\.click\(\{ timeout: 8_000 \}\)/);
+  assert.doesNotMatch(clickFn, /escapeRegExp\(teamName\)/);
 });

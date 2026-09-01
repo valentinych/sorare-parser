@@ -14,6 +14,7 @@ import {
 import {
   clubFileSlug,
   displaySorareOutputDir,
+  LINEUP_TEAM_LABELS_MATCH_SOURCE,
   isSorareInsideGamesApiUrl,
   loadSorareOutputDirConfig,
   mergeSorareInsideProbabilities,
@@ -721,14 +722,7 @@ export class SorareInsideSession {
       currentUrl: page.url(),
     });
 
-    const untilLocator = options.untilText
-      ? page
-          .locator("button, a, [role='button'], p, span")
-          .filter({
-            hasText: new RegExp(`^${escapeRegExp(options.untilText)}$`),
-          })
-          .first()
-      : null;
+    const untilText = options.untilText?.trim() || "";
 
     const stepScript = `() => {
       const rootSel = ${JSON.stringify(rootSelector)};
@@ -798,12 +792,12 @@ export class SorareInsideSession {
     let lastHeight = 0;
     let stable = 0;
     for (let pass = 0; pass < maxPasses; pass += 1) {
-      if (untilLocator) {
-        const visible = await untilLocator.isVisible().catch(() => false);
+      if (untilText) {
+        const visible = await this.lineupsTeamCardPresent(page, untilText);
         if (visible) {
           this.setStatus({
             state: "running",
-            message: `Found ${options.untilText} after scrolling.`,
+            message: `Found ${untilText} after scrolling.`,
             currentUrl: page.url(),
           });
           return true;
@@ -820,11 +814,11 @@ export class SorareInsideSession {
       if (height <= lastHeight && atBottom) {
         stable += 1;
         if (stable >= 2 && pass >= 2) {
-          if (untilLocator) {
-            const visible = await untilLocator.isVisible().catch(() => false);
+          if (untilText) {
+            const visible = await this.lineupsTeamCardPresent(page, untilText);
             if (visible) return true;
             const warn =
-              `Scroll settled but "${options.untilText}" is not visible. Continuing anyway.`;
+              `Scroll settled but "${untilText}" is not visible. Continuing anyway.`;
             console.warn(`[sorare-inside] ${warn}`);
             this.setStatus({
               state: "running",
@@ -841,8 +835,8 @@ export class SorareInsideSession {
       }
     }
 
-    const warn = options.untilText
-      ? `Scroll did not settle after ${maxPasses} passes (height=${lastHeight}); "${options.untilText}" not visible. Continuing anyway.`
+    const warn = untilText
+      ? `Scroll did not settle after ${maxPasses} passes (height=${lastHeight}); "${untilText}" not visible. Continuing anyway.`
       : `Scroll did not settle after ${maxPasses} passes (height=${lastHeight}). Continuing anyway.`;
     console.warn(`[sorare-inside] ${warn}`);
     this.setStatus({
@@ -1004,67 +998,114 @@ export class SorareInsideSession {
     await this.waitForModalLineupLoaded(page);
   }
 
-  /** Click team name in accordion; scroll + JS click when Playwright viewport check fails. */
+  /** True when a club row/card for this team is mounted on the lineups list. */
+  private async lineupsTeamCardPresent(
+    page: Page,
+    teamName: string,
+  ): Promise<boolean> {
+    try {
+      return await evaluateTimed<boolean>(
+        page,
+        this.lineupsTeamCardScript(teamName, "find"),
+        8_000,
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Find the club label on the scrolled lineups list (not the header combobox).
+   * `find` only locates; `click` scrolls it into view and clicks the row/card.
+   */
+  private lineupsTeamCardScript(
+    teamName: string,
+    mode: "find" | "click",
+  ): string {
+    return `() => {
+      const match = ${LINEUP_TEAM_LABELS_MATCH_SOURCE};
+      const want = ${JSON.stringify(teamName)};
+      const skipSel =
+        "[data-combobox-dropdown], [data-combobox-option], [data-combobox-target], [role='listbox'], [role='option'], [role='combobox'], .mantine-Select-dropdown, .mantine-Select-root, .mantine-Combobox-dropdown, .mantine-Combobox-option, .mantine-Combobox-root, input";
+      let best = null;
+      let bestScore = -1;
+      const nodes = document.querySelectorAll(
+        "button, a, [role='button'], p, span, h3, h4, strong",
+      );
+      for (const el of nodes) {
+        if (!(el instanceof HTMLElement) || el.closest(skipSel)) continue;
+        const raw = (el.textContent || "").trim();
+        if (!raw) continue;
+        const line = raw.split("\\n")[0].trim();
+        if (!match(line, want) && !match(raw, want)) continue;
+        let score = 120 - Math.min(line.length, 80);
+        const r = el.getBoundingClientRect();
+        if (r.width >= 2 && r.height >= 2) score += 30;
+        if (score > bestScore) {
+          best = el;
+          bestScore = score;
+        }
+      }
+      if (!best) return false;
+      if (${mode === "click" ? "true" : "false"}) {
+        best.scrollIntoView({ block: "center", inline: "nearest" });
+        let p = best.parentElement;
+        while (p) {
+          const cs = getComputedStyle(p);
+          if (/(auto|scroll)/.test(cs.overflowY) && p.scrollHeight > p.clientHeight + 2) {
+            const r = best.getBoundingClientRect();
+            const pr = p.getBoundingClientRect();
+            p.scrollTop += r.top - pr.top - pr.height / 2 + r.height / 2;
+          }
+          p = p.parentElement;
+        }
+        const target = best.closest("button, a, [role='button']") || best;
+        if (target instanceof HTMLElement) target.click();
+      }
+      return true;
+    }`;
+  }
+
+  /** Click the club row/card on the lineups list; combobox only if that row is missing. */
   private async clickTeamToOpenPopup(
     page: Page,
     teamName: string,
   ): Promise<boolean> {
-    const teamLink = page
-      .locator("button, a, [role='button'], p, span")
-      .filter({ hasText: new RegExp(`^${escapeRegExp(teamName)}$`) })
-      .first();
-
-    if (await teamLink.isVisible().catch(() => false)) {
-      await teamLink
-        .evaluate(`(el) => {
-          if (!(el instanceof HTMLElement)) return;
-          el.scrollIntoView({ block: "center", inline: "nearest" });
-          let p = el.parentElement;
-          while (p) {
-            const cs = getComputedStyle(p);
-            if (/(auto|scroll)/.test(cs.overflowY) && p.scrollHeight > p.clientHeight + 2) {
-              const r = el.getBoundingClientRect();
-              const pr = p.getBoundingClientRect();
-              p.scrollTop += r.top - pr.top - pr.height / 2 + r.height / 2;
-            }
-            p = p.parentElement;
-          }
-        }`)
-        .catch(() => {});
-      await sleep(250);
-      try {
-        await teamLink.click({ timeout: 5_000 });
-      } catch {
-        // Sticky headers / accordion overflow: Playwright says "outside viewport".
-        await teamLink
-          .evaluate(`(el) => {
-            if (!(el instanceof HTMLElement)) return;
-            const target =
-              el.closest("button, a, [role='button']") || el;
-            if (target instanceof HTMLElement) target.click();
-          }`)
-          .catch(() => {});
-      }
+    const present = await this.lineupsTeamCardPresent(page, teamName);
+    if (present) {
+      await evaluateTimed<boolean>(
+        page,
+        this.lineupsTeamCardScript(teamName, "click"),
+        8_000,
+      ).catch(() => false);
       await sleep(400);
       const modal = page
         .locator("[data-modal-content], .mantine-Modal-content")
         .first();
       if (await modal.isVisible().catch(() => false)) return true;
+      throw new Error(
+        `Clicked "${teamName}" on the lineups list but the lineup popup did not open.`,
+      );
     }
 
-    // Fallback: searchable team select on the lineups page.
+    // Last resort: header team select. Do not wait 8s for a missing option.
     const select = page
       .getByPlaceholder(/Select from|Select a team|search/i)
       .first();
     if (!(await select.isVisible().catch(() => false))) return false;
-    await select.click();
+    await select.click({ timeout: 2_000 });
     await select.fill(teamName);
-    await sleep(400);
-    await page
+    await sleep(250);
+    const option = page
       .locator("[data-combobox-option], .mantine-Select-option, [role='option']")
       .filter({ hasText: teamName })
-      .first()
-      .click({ timeout: 8_000 });
+      .first();
+    if (!(await option.isVisible().catch(() => false))) {
+      throw new Error(
+        `No clickable "${teamName}" club on the lineups list, and the team select has no matching option.`,
+      );
+    }
+    await option.click({ timeout: 2_000 });
     await sleep(400);
     return page
       .locator("[data-modal-content], .mantine-Modal-content")
@@ -1271,10 +1312,6 @@ export class SorareInsideSession {
       this.continueLogin = null;
     }
   }
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 let sharedSession: SorareInsideSession | null = null;

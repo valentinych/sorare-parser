@@ -6,6 +6,44 @@ import { clubFileSlug, parseScreenshotTour } from "./expected11Screenshot.js";
 
 export { clubFileSlug, parseScreenshotTour };
 
+/**
+ * Injected into the Playwright page (tsx `.toString()` adds `__name`, which
+ * does not exist in the browser). Keep this as plain JS.
+ */
+export const LINEUP_TEAM_LABELS_MATCH_SOURCE = `(displayed, wanted) => {
+  const slug = (value) =>
+    value
+      .normalize("NFKD")
+      .replace(/[\\u0300-\\u036f]/g, "")
+      .trim()
+      .replace(/\\s+(fc|afc|cf|sc)\\.?$/i, "")
+      .replace(/&/g, " and ")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .replace(/-{2,}/g, "-");
+  const shown = String(displayed || "").trim().split("\\n")[0].trim();
+  if (!shown || shown.length > 64) return false;
+  const want = String(wanted || "").trim();
+  if (!want) return false;
+  const shownSlug = slug(shown);
+  const wantSlug = slug(want);
+  if (!shownSlug || !wantSlug) return false;
+  if (shownSlug === wantSlug) return true;
+  if (!/(?:\\u2026|\\.\\.\\.)$/.test(shown)) return false;
+  const prefix = slug(shown.replace(/(?:\\u2026|\\.\\.\\.)$/, "").trim());
+  return prefix.length >= 6 && wantSlug.startsWith(prefix);
+}`;
+
+const lineupTeamLabelsMatchFn = new Function(
+  `return ${LINEUP_TEAM_LABELS_MATCH_SOURCE};`,
+)() as (displayed: string, wanted: string) => boolean;
+
+/** True when a lineups-list label is the same club as `wanted`. */
+export function lineupTeamLabelsMatch(displayed: string, wanted: string): boolean {
+  return lineupTeamLabelsMatchFn(displayed, wanted);
+}
+
 export const SORARE_INSIDE_ORIGIN = "https://sorareinside.com";
 export const SORARE_INSIDE_API_ORIGIN = "https://platform-api.sorareinside.com";
 
