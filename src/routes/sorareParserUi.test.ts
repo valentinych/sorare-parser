@@ -19,7 +19,7 @@ test("Sorare parser UI keeps Matches stable after capture and exposes a folder p
   assert.ok(captureStart > 0 && captureEnd > captureStart);
   const captureFn = html.slice(captureStart, captureEnd);
   assert.match(captureFn, /markSorareSideCaptured\(btn/);
-  assert.match(captureFn, /Scrolling to load \$\{team\.teamName\}/);
+  assert.match(captureFn, /Expanding league to click \$\{team\.teamName\}/);
   assert.match(captureFn, /\/api\/sorare\/status/);
   assert.doesNotMatch(captureFn, /Capturing \$\{team\.teamName\} →/);
   assert.doesNotMatch(captureFn, /renderSorareMatches/);
@@ -34,7 +34,9 @@ test("SorareInside session scrolls the lineups page before capture", async () =>
   assert.match(src, /scrollLineupsPageToLoadAll/);
   assert.match(src, /Scrolling lineups to the bottom to load all matches/);
   assert.match(src, /scrollToLoadLazyContent/);
-  assert.match(src, /Scrolling to load \$\{teamName\} before capture/);
+  assert.match(src, /Scrolling expanded \$\{league.competitionName\} for \$\{teamName\}/);
+  assert.match(src, /Expanding \$\{league.competitionName\}/);
+  assert.doesNotMatch(src, /Scrolling to load \$\{teamName\} before capture/);
   assert.match(src, /Scrolling lineup popup to the bottom to load all content/);
   assert.match(src, /Scroll did not settle after \$\{maxPasses\} passes/);
   assert.match(src, /SI_SPINNER_SELECTOR/);
@@ -48,20 +50,28 @@ test("SorareInside session scrolls the lineups page before capture", async () =>
   assert.match(captureFn, /expandLeagueAccordion/);
   assert.match(captureFn, /scrollToLoadLazyContent/);
   assert.match(captureFn, /untilText: teamName/);
+  assert.doesNotMatch(captureFn, /scrollLineupsPageToLoadAll/);
+  assert.doesNotMatch(captureFn, /getByPlaceholder/);
 });
 
-test("SorareInside capture clicks the lineups club card, not the combobox", async () => {
+test("SorareInside capture clicks the lineups match after expanding the league", async () => {
   const src = await readFile(
     new URL("../sync/sorareInsideLineups.ts", import.meta.url),
     "utf8",
   );
-  const clickStart = src.indexOf("private async clickTeamToOpenPopup");
-  const clickEnd = src.indexOf("private async expandLeagueAccordion");
+  const clickStart = src.indexOf("private async clickMatchOnLineupsList");
+  const clickEnd = src.indexOf("private leagueAccordionNeedles");
   assert.ok(clickStart > 0 && clickEnd > clickStart);
   const clickFn = src.slice(clickStart, clickEnd);
   assert.match(src, /LINEUP_TEAM_LABELS_MATCH_SOURCE/);
   assert.match(clickFn, /lineupsTeamCardPresent/);
-  assert.match(clickFn, /No clickable "\$\{teamName\}" club on the lineups list/);
+  assert.match(clickFn, /Clicking \$\{teamName\} on the lineups list/);
+  assert.match(clickFn, /No clickable "\$\{teamName\}" match on the lineups list/);
+  assert.doesNotMatch(clickFn, /getByPlaceholder/);
+  assert.doesNotMatch(clickFn, /data-combobox-option/);
+  assert.doesNotMatch(clickFn, /Select from/);
+  assert.doesNotMatch(clickFn, /select\.fill/);
+  assert.doesNotMatch(clickFn, /team select has no matching option/);
   assert.doesNotMatch(clickFn, /\.click\(\{ timeout: 8_000 \}\)/);
-  assert.doesNotMatch(clickFn, /escapeRegExp\(teamName\)/);
+  assert.doesNotMatch(src, /private async clickTeamToOpenPopup/);
 });

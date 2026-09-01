@@ -711,6 +711,10 @@ export class SorareInsideSession {
       message: string;
       rootSelector?: string;
       untilText?: string;
+      untilOpponent?: string;
+      untilCheck?: () => Promise<boolean>;
+      requireUntil?: boolean;
+      untilMissError?: string;
       maxPasses?: number;
     },
   ): Promise<boolean> {
@@ -723,6 +727,21 @@ export class SorareInsideSession {
     });
 
     const untilText = options.untilText?.trim() || "";
+    const hasUntil = Boolean(untilText || options.untilCheck);
+    const untilReached = async (): Promise<boolean> => {
+      if (untilText) {
+        return this.lineupsTeamCardPresent(
+          page,
+          untilText,
+          options.untilOpponent,
+        );
+      }
+      if (options.untilCheck) return options.untilCheck();
+      return false;
+    };
+    const failIfRequired = (detail: string): never => {
+      throw new Error(options.untilMissError || detail);
+    };
 
     const stepScript = `() => {
       const rootSel = ${JSON.stringify(rootSelector)};
@@ -792,16 +811,15 @@ export class SorareInsideSession {
     let lastHeight = 0;
     let stable = 0;
     for (let pass = 0; pass < maxPasses; pass += 1) {
-      if (untilText) {
-        const visible = await this.lineupsTeamCardPresent(page, untilText);
-        if (visible) {
-          this.setStatus({
-            state: "running",
-            message: `Found ${untilText} after scrolling.`,
-            currentUrl: page.url(),
-          });
-          return true;
-        }
+      if (hasUntil && (await untilReached())) {
+        this.setStatus({
+          state: "running",
+          message: untilText
+            ? `Found ${untilText} after scrolling.`
+            : options.message,
+          currentUrl: page.url(),
+        });
+        return true;
       }
       const result = await evaluateTimed<{
         height: number;
@@ -814,15 +832,16 @@ export class SorareInsideSession {
       if (height <= lastHeight && atBottom) {
         stable += 1;
         if (stable >= 2 && pass >= 2) {
-          if (untilText) {
-            const visible = await this.lineupsTeamCardPresent(page, untilText);
-            if (visible) return true;
-            const warn =
-              `Scroll settled but "${untilText}" is not visible. Continuing anyway.`;
-            console.warn(`[sorare-inside] ${warn}`);
+          if (hasUntil) {
+            if (await untilReached()) return true;
+            const miss = untilText
+              ? `Scroll settled but "${untilText}" is not on the expanded lineups list.`
+              : "Scroll settled but the target was not found on the lineups list.";
+            if (options.requireUntil) failIfRequired(miss);
+            console.warn(`[sorare-inside] ${miss} Continuing anyway.`);
             this.setStatus({
               state: "running",
-              message: warn,
+              message: miss,
               currentUrl: page.url(),
             });
             return false;
@@ -836,12 +855,13 @@ export class SorareInsideSession {
     }
 
     const warn = untilText
-      ? `Scroll did not settle after ${maxPasses} passes (height=${lastHeight}); "${untilText}" not visible. Continuing anyway.`
-      : `Scroll did not settle after ${maxPasses} passes (height=${lastHeight}). Continuing anyway.`;
-    console.warn(`[sorare-inside] ${warn}`);
+      ? `Scroll did not settle after ${maxPasses} passes (height=${lastHeight}); "${untilText}" is not on the expanded lineups list.`
+      : `Scroll did not settle after ${maxPasses} passes (height=${lastHeight}).`;
+    if (options.requireUntil) failIfRequired(warn);
+    console.warn(`[sorare-inside] ${warn} Continuing anyway.`);
     this.setStatus({
       state: "running",
-      message: warn,
+      message: `${warn} Continuing anyway.`,
       currentUrl: page.url(),
     });
     return false;
@@ -988,25 +1008,26 @@ export class SorareInsideSession {
 
     await this.closeModal(page);
 
-    const opened = await this.clickTeamToOpenPopup(page, team.teamName);
-    if (!opened) {
-      throw new Error(
-        `Could not open lineup popup for ${team.teamName}. Expand the league accordion first.`,
-      );
-    }
+    const opponent = side === "home" ? match.away : match.home;
+    const league = this.leagues.find((item) => item.id === match.leagueId);
+    await this.clickMatchOnLineupsList(page, team.teamName, {
+      opponentName: opponent.teamName,
+      leagueName: league?.competitionName ?? match.leagueLabel,
+    });
 
     await this.waitForModalLineupLoaded(page);
   }
 
-  /** True when a club row/card for this team is mounted on the lineups list. */
+  /** True when a club/match row for this team is mounted on the lineups list. */
   private async lineupsTeamCardPresent(
     page: Page,
     teamName: string,
+    opponentName?: string,
   ): Promise<boolean> {
     try {
       return await evaluateTimed<boolean>(
         page,
-        this.lineupsTeamCardScript(teamName, "find"),
+        this.lineupsTeamCardScript(teamName, "find", opponentName),
         8_000,
       );
     } catch {
@@ -1015,32 +1036,47 @@ export class SorareInsideSession {
   }
 
   /**
-   * Find the club label on the scrolled lineups list (not the header combobox).
-   * `find` only locates; `click` scrolls it into view and clicks the row/card.
+   * Find the club or Home-vs-Away row on the expanded lineups list.
+   * Never uses the header team Select/combobox.
    */
   private lineupsTeamCardScript(
     teamName: string,
     mode: "find" | "click",
+    opponentName?: string,
   ): string {
     return `() => {
       const match = ${LINEUP_TEAM_LABELS_MATCH_SOURCE};
       const want = ${JSON.stringify(teamName)};
+      const opponent = ${JSON.stringify(opponentName || "")};
       const skipSel =
-        "[data-combobox-dropdown], [data-combobox-option], [data-combobox-target], [role='listbox'], [role='option'], [role='combobox'], .mantine-Select-dropdown, .mantine-Select-root, .mantine-Combobox-dropdown, .mantine-Combobox-option, .mantine-Combobox-root, input";
+        "[data-combobox-dropdown], [data-combobox-option], [data-combobox-target], [role='combobox'], .mantine-Select-dropdown, .mantine-Select-root, .mantine-Combobox-dropdown, .mantine-Combobox-option, .mantine-Combobox-root, input, [data-modal-content], .mantine-Modal-content";
+      const accordionSel =
+        "[data-accordion-control], .mantine-Accordion-control";
       let best = null;
       let bestScore = -1;
       const nodes = document.querySelectorAll(
-        "button, a, [role='button'], p, span, h3, h4, strong",
+        "button, a, [role='button'], p, span, h3, h4, strong, li, div, img",
       );
       for (const el of nodes) {
         if (!(el instanceof HTMLElement) || el.closest(skipSel)) continue;
-        const raw = (el.textContent || "").trim();
-        if (!raw) continue;
+        if (el.matches(accordionSel) || el.closest(accordionSel) === el) continue;
+        const raw = (
+          el instanceof HTMLImageElement
+            ? el.getAttribute("alt") || ""
+            : el.textContent || ""
+        ).trim();
+        if (!raw || raw.length > 160) continue;
         const line = raw.split("\\n")[0].trim();
         if (!match(line, want) && !match(raw, want)) continue;
-        let score = 120 - Math.min(line.length, 80);
+        let score = 160 - Math.min(line.length, 120);
         const r = el.getBoundingClientRect();
         if (r.width >= 2 && r.height >= 2) score += 30;
+        if (el.closest("[data-accordion-panel], .mantine-Accordion-panel, .mantine-Accordion-content")) {
+          score += 40;
+        }
+        if (el.closest(accordionSel)) score -= 80;
+        if (opponent && (match(line, opponent) || match(raw, opponent))) score += 25;
+        if (/\\bvs\\.?\\b/i.test(line) || /\\bvs\\.?\\b/i.test(raw)) score += 10;
         if (score > bestScore) {
           best = el;
           bestScore = score;
@@ -1059,86 +1095,167 @@ export class SorareInsideSession {
           }
           p = p.parentElement;
         }
-        const target = best.closest("button, a, [role='button']") || best;
+        let target = best;
+        let cur = best;
+        while (cur && cur !== document.body) {
+          if (
+            cur.matches("button, a, [role='button']") &&
+            !cur.matches(accordionSel) &&
+            !cur.closest(skipSel)
+          ) {
+            target = cur;
+            break;
+          }
+          const cs = getComputedStyle(cur);
+          if (
+            cs.cursor === "pointer" &&
+            !cur.matches(accordionSel) &&
+            (cur.textContent || "").trim().length < 200
+          ) {
+            target = cur;
+          }
+          cur = cur.parentElement;
+        }
         if (target instanceof HTMLElement) target.click();
       }
       return true;
     }`;
   }
 
-  /** Click the club row/card on the lineups list; combobox only if that row is missing. */
-  private async clickTeamToOpenPopup(
+  /** Click the match/club on the expanded lineups list. Never uses team search. */
+  private async clickMatchOnLineupsList(
     page: Page,
     teamName: string,
-  ): Promise<boolean> {
-    const present = await this.lineupsTeamCardPresent(page, teamName);
-    if (present) {
-      await evaluateTimed<boolean>(
-        page,
-        this.lineupsTeamCardScript(teamName, "click"),
-        8_000,
-      ).catch(() => false);
-      await sleep(400);
-      const modal = page
-        .locator("[data-modal-content], .mantine-Modal-content")
-        .first();
-      if (await modal.isVisible().catch(() => false)) return true;
+    options: { opponentName?: string; leagueName?: string } = {},
+  ): Promise<void> {
+    this.setStatus({
+      state: "running",
+      message: `Clicking ${teamName} on the lineups list…`,
+      currentUrl: page.url(),
+    });
+
+    const present = await this.lineupsTeamCardPresent(
+      page,
+      teamName,
+      options.opponentName,
+    );
+    if (!present) {
+      const league = options.leagueName ? ` in ${options.leagueName}` : "";
       throw new Error(
-        `Clicked "${teamName}" on the lineups list but the lineup popup did not open.`,
+        `No clickable "${teamName}" match on the lineups list${league} after expanding the league.`,
       );
     }
 
-    // Last resort: header team select. Do not wait 8s for a missing option.
-    const select = page
-      .getByPlaceholder(/Select from|Select a team|search/i)
-      .first();
-    if (!(await select.isVisible().catch(() => false))) return false;
-    await select.click({ timeout: 2_000 });
-    await select.fill(teamName);
-    await sleep(250);
-    const option = page
-      .locator("[data-combobox-option], .mantine-Select-option, [role='option']")
-      .filter({ hasText: teamName })
-      .first();
-    if (!(await option.isVisible().catch(() => false))) {
-      throw new Error(
-        `No clickable "${teamName}" club on the lineups list, and the team select has no matching option.`,
-      );
-    }
-    await option.click({ timeout: 2_000 });
+    await evaluateTimed<boolean>(
+      page,
+      this.lineupsTeamCardScript(teamName, "click", options.opponentName),
+      8_000,
+    ).catch(() => false);
     await sleep(400);
-    return page
+    const modal = page
       .locator("[data-modal-content], .mantine-Modal-content")
+      .first();
+    if (await modal.isVisible().catch(() => false)) return;
+    throw new Error(
+      `Clicked "${teamName}" on the lineups list but the lineup popup did not open.`,
+    );
+  }
+
+  private leagueAccordionNeedles(league: SorareInsideLeague): string[] {
+    const raw = [
+      league.competitionName,
+      league.label,
+      league.competitionName.split(" ").slice(-2).join(" "),
+    ];
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const item of raw) {
+      const t = item.trim();
+      if (t.length < 4) continue;
+      const key = t.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(t);
+    }
+    return out;
+  }
+
+  private leagueAccordionControl(
+    page: Page,
+    league: SorareInsideLeague,
+  ): ReturnType<Page["locator"]> {
+    const needles = this.leagueAccordionNeedles(league);
+    const re = new RegExp(
+      needles.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"),
+      "i",
+    );
+    const item = page
+      .locator("[data-accordion-item], .mantine-Accordion-item")
+      .filter({ hasText: re })
+      .first();
+    return item
+      .locator("[data-accordion-control], .mantine-Accordion-control")
       .first()
-      .isVisible()
-      .catch(() => false);
+      .or(
+        page
+          .locator("[data-accordion-control], .mantine-Accordion-control")
+          .filter({ hasText: re })
+          .first(),
+      );
+  }
+
+  private async resetLineupsScroll(page: Page): Promise<void> {
+    await evaluateTimed(
+      page,
+      `() => {
+        window.scrollTo(0, 0);
+        const se = document.scrollingElement;
+        if (se) se.scrollTop = 0;
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+        for (const el of document.querySelectorAll(
+          ".mantine-ScrollArea-viewport, [data-radix-scroll-area-viewport]",
+        )) {
+          if (el instanceof HTMLElement) el.scrollTop = 0;
+        }
+      }`,
+      8_000,
+    ).catch(() => {});
   }
 
   private async expandLeagueAccordion(
     page: Page,
     league: SorareInsideLeague,
   ): Promise<void> {
-    const control = page
-      .locator("[data-accordion-control], .mantine-Accordion-control")
-      .filter({ hasText: league.competitionName })
-      .first();
+    this.setStatus({
+      state: "running",
+      message: `Expanding ${league.competitionName}…`,
+      currentUrl: page.url(),
+    });
+
+    await this.resetLineupsScroll(page);
+    await this.scrollToLoadLazyContent(page, {
+      message: `Scrolling to ${league.competitionName} to expand the league…`,
+      untilCheck: async () =>
+        (await this.leagueAccordionControl(page, league).count()) > 0,
+      requireUntil: true,
+      untilMissError: `Could not find "${league.competitionName}" league accordion on the lineups page.`,
+    });
+
+    const control = this.leagueAccordionControl(page, league);
     if (!(await control.count())) {
-      // Competition name alone; try full label fragment.
-      const alt = page
-        .locator("[data-accordion-control], .mantine-Accordion-control")
-        .filter({ hasText: league.competitionName.split(" ").slice(-2).join(" ") })
-        .first();
-      if (await alt.count()) {
-        const expanded = await alt.getAttribute("aria-expanded");
-        if (expanded !== "true") await alt.click();
-        await sleep(400);
-        return;
-      }
-      return;
+      throw new Error(
+        `Could not find "${league.competitionName}" league accordion on the lineups page.`,
+      );
     }
     const expanded = await control.getAttribute("aria-expanded");
     if (expanded !== "true") {
-      await control.click();
+      await control.click({ timeout: 5_000 });
+      await sleep(500);
+    }
+    const still = await control.getAttribute("aria-expanded");
+    if (still === "false") {
+      await control.click({ timeout: 5_000 }).catch(() => {});
       await sleep(400);
     }
   }
@@ -1180,7 +1297,7 @@ export class SorareInsideSession {
     this.busy = true;
     this.setStatus({
       state: "running",
-      message: `Opening lineup popup for ${teamName}…`,
+      message: `Expanding league for ${teamName}…`,
       currentUrl: this.page?.url() ?? this.lineupsUrl,
     });
 
@@ -1199,20 +1316,24 @@ export class SorareInsideSession {
         await sleep(1_500);
         this.lineupsFullyLoaded = false;
       }
-      if (!this.lineupsFullyLoaded) {
-        await this.scrollLineupsPageToLoadAll(page);
-        this.lineupsFullyLoaded = true;
-      }
 
       const league = this.leagues.find((item) => item.id === match.leagueId);
-      if (league) await this.expandLeagueAccordion(page, league);
+      if (!league) {
+        throw new Error(
+          `Unknown league for ${teamName}. Expand selected leagues first.`,
+        );
+      }
+      await this.expandLeagueAccordion(page, league);
 
-      // Discover may already have scrolled league headers; after expand, the
-      // club's match row is still lazy. Always step-scroll until the team
-      // name mounts (or height settles) before opening the lineup popup.
+      const opponent =
+        request.side === "home" ? match.away.teamName : match.home.teamName;
       await this.scrollToLoadLazyContent(page, {
-        message: `Scrolling to load ${teamName} before capture…`,
+        message: `Scrolling expanded ${league.competitionName} for ${teamName}…`,
         untilText: teamName,
+        untilOpponent: opponent,
+        requireUntil: true,
+        untilMissError:
+          `No clickable "${teamName}" match on the ${league.competitionName} lineups list after expanding the league.`,
       });
 
       await this.openLineupPopup(page, match, request.side);

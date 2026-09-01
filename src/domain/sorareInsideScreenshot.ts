@@ -22,17 +22,45 @@ export const LINEUP_TEAM_LABELS_MATCH_SOURCE = `(displayed, wanted) => {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
       .replace(/-{2,}/g, "-");
-  const shown = String(displayed || "").trim().split("\\n")[0].trim();
-  if (!shown || shown.length > 64) return false;
+  const DROP = {
+    north: 1, end: 1, town: 1, athletic: 1, hotspur: 1, albion: 1,
+    rovers: 1, wanderers: 1, county: 1, argyle: 1, forest: 1, wednesday: 1,
+  };
+  const slugsEqual = (a, b) => {
+    if (!a || !b) return false;
+    if (a === b) return true;
+    const shorter = a.length < b.length ? a : b;
+    const longer = a.length < b.length ? b : a;
+    if (!longer.startsWith(shorter + "-")) return false;
+    const rest = longer.slice(shorter.length + 1).split("-");
+    return rest.length > 0 && rest.every((t) => DROP[t]);
+  };
+  const clubSlugMatch = (shownSlug, wantSlug) => {
+    if (!shownSlug || !wantSlug) return false;
+    if (slugsEqual(shownSlug, wantSlug)) return true;
+    if (shownSlug.includes("-vs-") || shownSlug.includes("-v-")) {
+      if (shownSlug.split(/-vs-|-v-/).some((p) => slugsEqual(p, wantSlug))) return true;
+    }
+    if (wantSlug.length < 6) return false;
+    return (
+      shownSlug.startsWith(wantSlug + "-") ||
+      shownSlug.endsWith("-" + wantSlug) ||
+      shownSlug.includes("-" + wantSlug + "-")
+    );
+  };
+  const shown = String(displayed || "").trim();
+  if (!shown || shown.length > 160) return false;
   const want = String(wanted || "").trim();
   if (!want) return false;
-  const shownSlug = slug(shown);
+  const firstLine = shown.split("\\n")[0].trim();
   const wantSlug = slug(want);
-  if (!shownSlug || !wantSlug) return false;
-  if (shownSlug === wantSlug) return true;
-  if (!/(?:\\u2026|\\.\\.\\.)$/.test(shown)) return false;
-  const prefix = slug(shown.replace(/(?:\\u2026|\\.\\.\\.)$/, "").trim());
-  return prefix.length >= 6 && wantSlug.startsWith(prefix);
+  if (clubSlugMatch(slug(firstLine), wantSlug)) return true;
+  if (firstLine !== shown && clubSlugMatch(slug(shown), wantSlug)) return true;
+  if (/(?:\\u2026|\\.\\.\\.)$/.test(firstLine)) {
+    const prefix = slug(firstLine.replace(/(?:\\u2026|\\.\\.\\.)$/, "").trim());
+    if (prefix.length >= 6 && wantSlug.startsWith(prefix)) return true;
+  }
+  return false;
 }`;
 
 const lineupTeamLabelsMatchFn = new Function(

@@ -78,6 +78,21 @@ test("lineupTeamLabelsMatch treats FC suffix and ellipsis as the same club", () 
   assert.equal(lineupTeamLabelsMatch("Manchester", "Manchester City"), false);
 });
 
+test("lineupTeamLabelsMatch accepts short / fixture labels like Preston", () => {
+  assert.equal(lineupTeamLabelsMatch("Preston", "Preston North End FC"), true);
+  assert.equal(lineupTeamLabelsMatch("Preston North End", "Preston North End FC"), true);
+  assert.equal(
+    lineupTeamLabelsMatch("Preston North End vs Hull City", "Preston North End FC"),
+    true,
+  );
+  assert.equal(
+    lineupTeamLabelsMatch("Hull City vs Preston North End", "Preston North End FC"),
+    true,
+  );
+  assert.equal(lineupTeamLabelsMatch("Ipswich", "Ipswich Town"), true);
+  assert.equal(lineupTeamLabelsMatch("Blackburn", "Preston North End FC"), false);
+});
+
 test("parseSorareInsideCaptureRequest + path helpers", () => {
   const req = parseSorareInsideCaptureRequest({
     gameId: "g1",

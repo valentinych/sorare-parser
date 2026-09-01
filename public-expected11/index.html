@@ -1544,7 +1544,7 @@
           sorareCaptureStatus.textContent = error.message;
           return;
         }
-        sorareCaptureStatus.textContent = `Scrolling to load ${team.teamName}…`;
+        sorareCaptureStatus.textContent = `Expanding league to click ${team.teamName}…`;
         const capturePoll = setInterval(() => {
           request("/api/sorare/status")
             .then((status) => {
