@@ -38,7 +38,8 @@ test("Sorare parser UI queues remaining missing sides without rebuilding Matches
   assert.ok(start > 0 && end > start);
   const fn = html.slice(start, end);
   assert.match(fn, /dataset\.saved === "1"/);
-  assert.match(fn, /\$\{i \+ 1\}\/\$\{total\}/);
+  assert.match(fn, /Capturing \$\{i \+ 1\}\/\$\{total\} remaining/);
+  assert.match(fn, /failed\.push/);
   assert.match(fn, /captureSorareSide\(/);
   assert.match(fn, /sorareCaptureRemaining\.disabled = true/);
   assert.doesNotMatch(fn, /renderSorareMatches/);

@@ -1637,7 +1637,7 @@
         sorareCaptureRemaining.disabled = true;
         const total = remaining.length;
         let ok = 0;
-        let failed = 0;
+        const failed = [];
         try {
           for (let i = 0; i < remaining.length; i++) {
             const item = remaining[i];
@@ -1645,15 +1645,15 @@
               item.match,
               item.side,
               item.btn,
-              `${i + 1}/${total}`,
+              `Capturing ${i + 1}/${total} remaining…`,
             );
             if (saved) ok += 1;
-            else failed += 1;
+            else failed.push(`${item.teamName} (${item.side})`);
           }
           sorareCaptureStatus.textContent =
-            failed === 0
+            failed.length === 0
               ? `Captured remaining ${ok}/${total}.`
-              : `Captured remaining ${ok}/${total} · ${failed} failed.`;
+              : `Captured remaining ${ok}/${total} · ${failed.length} failed: ${failed.join(", ")}.`;
         } finally {
           sorareCaptureBusy = false;
           sorareCaptureRemaining.disabled = false;

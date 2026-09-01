@@ -12,6 +12,7 @@ import {
   listSorareCapturedClubs,
   mergeSorareInsideProbabilities,
   remainingSorareCaptureSides,
+  isSorareSideCapturedOnDisk,
   parseBenchAndDnpPlayerLists,
   parseProbabilitiesFromModalText,
   parseSorareInsideCaptureRequest,
@@ -308,9 +309,16 @@ test("remainingSorareCaptureSides skips clubs that already have png or json", ()
   mkdirSync(tourDir, { recursive: true });
   writeFileSync(join(tourDir, "millwall.png"), "x");
   writeFileSync(join(tourDir, "millwall.json"), "{}");
+  writeFileSync(join(tourDir, "southampton.png"), "x");
+  writeFileSync(join(tourDir, "leeds-united.json"), "{}");
   writeFileSync(join(tourDir, "only-green-green.png"), "x");
   const clubs = listSorareCapturedClubs(root, 3);
   const bySlug = Object.fromEntries(clubs.map((c) => [c.clubSlug, c]));
+  assert.equal(isSorareSideCapturedOnDisk(bySlug.millwall), true);
+  assert.equal(isSorareSideCapturedOnDisk(bySlug.southampton), true);
+  assert.equal(isSorareSideCapturedOnDisk(bySlug["leeds-united"]), true);
+  assert.equal(isSorareSideCapturedOnDisk(bySlug["only-green"]), false);
+  assert.equal(isSorareSideCapturedOnDisk(undefined), false);
   const side = (teamName: string, lineupId: string | null) => ({
     teamName,
     teamSlug: null,
@@ -334,6 +342,14 @@ test("remainingSorareCaptureSides skips clubs that already have png or json", ()
         date: null,
         home: side("TBD", null),
         away: side("Only Green", "a2"),
+      },
+      {
+        gameId: "g3",
+        leagueId: "champ",
+        leagueLabel: "Championship",
+        date: null,
+        home: side("Southampton FC", "h3"),
+        away: side("Leeds United", "a3"),
       },
     ],
     new Map([["champ", 3]]),
