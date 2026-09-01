@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
   clubFileSlug,
+  findLineupClubAnchorInHtml,
   isSorareInsideGamesApiUrl,
   lineupTeamLabelsMatch,
   leagueLabel,
@@ -122,6 +123,28 @@ test("lineupTeamLabelsMatch accepts Championship vs-rows and West Brom truncatio
     ),
     true,
   );
+});
+
+test("findLineupClubAnchorInHtml clicks the visible Championship anchor, not the Select option", () => {
+  const html = readFileSync(
+    new URL("./sorareInsideLineupRow.fixture.html", import.meta.url),
+    "utf8",
+  );
+  const birmingham = findLineupClubAnchorInHtml(html, "Birmingham City FC");
+  assert.equal(birmingham.ok, true);
+  assert.equal(birmingham.text, "Birmingham City FC");
+  assert.equal(birmingham.tag, "A");
+  assert.match(String(birmingham.cls), /mantine-Anchor-root/);
+
+  const westBrom = findLineupClubAnchorInHtml(html, "West Bromwich Albion FC");
+  assert.equal(westBrom.ok, true);
+  assert.equal(westBrom.text, "West Bromwich Albion FC");
+
+  const preston = findLineupClubAnchorInHtml(html, "Preston North End FC");
+  assert.equal(preston.ok, true);
+  assert.equal(preston.text, "Preston North End FC");
+
+  assert.equal(findLineupClubAnchorInHtml(html, "Not A Club FC").ok, false);
 });
 
 test("parseSorareInsideCaptureRequest + path helpers", () => {

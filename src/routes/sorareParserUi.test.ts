@@ -63,14 +63,15 @@ test("SorareInside capture clicks the lineups match after expanding the league",
   const clickEnd = src.indexOf("private leagueAccordionNeedles");
   assert.ok(clickStart > 0 && clickEnd > clickStart);
   const clickFn = src.slice(clickStart, clickEnd);
-  assert.match(src, /LINEUP_TEAM_LABELS_MATCH_SOURCE/);
+  assert.match(src, /LINEUP_CLUB_FIND_SOURCE/);
   assert.match(clickFn, /lineupsTeamCardPresent/);
   assert.match(clickFn, /Clicking \$\{teamName\} on the lineups list/);
   assert.match(clickFn, /No clickable "\$\{teamName\}" match on the lineups list/);
   assert.match(clickFn, /clickVisibleMatchRow/);
-  assert.match(clickFn, /getByText/);
+  assert.match(clickFn, /a\.mantine-Anchor-root/);
+  assert.match(clickFn, /data-combobox-option/);
   assert.doesNotMatch(clickFn, /getByPlaceholder/);
-  assert.doesNotMatch(clickFn, /data-combobox-option/);
+  assert.doesNotMatch(clickFn, /getByText/);
   assert.doesNotMatch(clickFn, /Select from/);
   assert.doesNotMatch(clickFn, /select\.fill/);
   assert.doesNotMatch(clickFn, /team select has no matching option/);

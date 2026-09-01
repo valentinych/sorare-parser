@@ -2,6 +2,7 @@
 
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { parseHTML } from "linkedom";
 import { clubFileSlug, parseScreenshotTour } from "./expected11Screenshot.js";
 
 export { clubFileSlug, parseScreenshotTour };
@@ -97,6 +98,94 @@ const lineupTeamLabelsMatchFn = new Function(
 /** True when a lineups-list label is the same club as `wanted`. */
 export function lineupTeamLabelsMatch(displayed: string, wanted: string): boolean {
   return lineupTeamLabelsMatchFn(displayed, wanted);
+}
+
+/**
+ * Find the visible club name on a Championship vs-row.
+ * Live DOM (2026-09-01): `a.mantine-Anchor-root > p` with "Birmingham City FC".
+ * Hidden ` [data-combobox-option]` copies must be skipped — they sort first.
+ * Injected as plain JS (no tsx `__name`).
+ */
+export const LINEUP_CLUB_FIND_SOURCE = `(want, mode, requireVisible) => {
+  const match = ${LINEUP_TEAM_LABELS_MATCH_SOURCE};
+  const skipSel =
+    "[data-combobox-option], [data-combobox-dropdown], [data-combobox-target], [role='combobox'], .mantine-Select-option, .mantine-Select-dropdown, .mantine-Combobox-option, .mantine-Combobox-dropdown";
+  const textOf = (el) =>
+    String((el.innerText != null ? el.innerText : el.textContent) || "")
+      .replace(/\\s+/g, " ")
+      .trim();
+  const isVisible = (el) => {
+    if (!requireVisible) return true;
+    if (typeof el.getBoundingClientRect !== "function") return true;
+    const r = el.getBoundingClientRect();
+    return r.width >= 4 && r.height >= 4;
+  };
+  const clubNodes = document.querySelectorAll(
+    "a.mantine-Anchor-root, p.mantine-Text-root",
+  );
+  let best = null;
+  for (const el of clubNodes) {
+    if (!el || el.closest(skipSel)) continue;
+    const t = textOf(el);
+    if (!t || t.length > 80) continue;
+    if (!match(t, want)) continue;
+    if (!isVisible(el)) continue;
+    best = (el.closest && el.closest("a.mantine-Anchor-root")) || el;
+    break;
+  }
+  if (!best) {
+    for (const el of document.querySelectorAll("div[class*='_game_']")) {
+      if (!el || el.closest(skipSel)) continue;
+      const t = textOf(el);
+      if (!t || t.length > 400 || !match(t, want)) continue;
+      if (!isVisible(el)) continue;
+      let club = null;
+      for (const n of el.querySelectorAll("a.mantine-Anchor-root, p.mantine-Text-root")) {
+        if (n.closest(skipSel)) continue;
+        if (match(textOf(n), want)) {
+          club = n.closest("a.mantine-Anchor-root") || n;
+          break;
+        }
+      }
+      best = club || el;
+      break;
+    }
+  }
+  if (!best) return { ok: false, text: null, tag: null, cls: null };
+  if (mode === "click") {
+    if (best.scrollIntoView) best.scrollIntoView({ block: "center", inline: "nearest" });
+    if (typeof best.click === "function") best.click();
+  }
+  return {
+    ok: true,
+    text: textOf(best).slice(0, 80),
+    tag: best.tagName || null,
+    cls: String(best.className || "").slice(0, 120),
+  };
+}`;
+
+type LineupClubFindResult = {
+  ok: boolean;
+  text: string | null;
+  tag: string | null;
+  cls: string | null;
+};
+
+/** Run the live-page club finder against saved lineups HTML (no browser). */
+export function findLineupClubAnchorInHtml(
+  html: string,
+  teamName: string,
+): LineupClubFindResult {
+  const { document } = parseHTML(`<!doctype html><html><body>${html}</body></html>`);
+  const find = new Function(
+    "document",
+    `return ${LINEUP_CLUB_FIND_SOURCE};`,
+  )(document) as (
+    want: string,
+    mode: "find" | "click",
+    requireVisible: boolean,
+  ) => LineupClubFindResult;
+  return find(teamName, "find", false);
 }
 
 export const SORARE_INSIDE_ORIGIN = "https://sorareinside.com";

@@ -14,7 +14,7 @@ import {
 import {
   clubFileSlug,
   displaySorareOutputDir,
-  LINEUP_TEAM_LABELS_MATCH_SOURCE,
+  LINEUP_CLUB_FIND_SOURCE,
   isSorareInsideGamesApiUrl,
   loadSorareOutputDirConfig,
   mergeSorareInsideProbabilities,
@@ -1018,101 +1018,36 @@ export class SorareInsideSession {
     await this.waitForModalLineupLoaded(page);
   }
 
-  /** True when a club/match row for this team is mounted on the lineups list. */
+  /** True when a visible club name anchor is mounted on the expanded list. */
   private async lineupsTeamCardPresent(
     page: Page,
     teamName: string,
-    opponentName?: string,
+    _opponentName?: string,
   ): Promise<boolean> {
     try {
-      return await evaluateTimed<boolean>(
+      const found = await evaluateTimed<{ ok?: boolean }>(
         page,
-        this.lineupsTeamCardScript(teamName, "find", opponentName),
+        this.lineupsTeamCardScript(teamName, "find"),
         8_000,
       );
+      return Boolean(found?.ok);
     } catch {
       return false;
     }
   }
 
   /**
-   * Find the Home-vs-Away match row (plain text, not a combobox option).
-   * `find` only locates; `click` clicks the row itself — names are not buttons.
+   * Click `a.mantine-Anchor-root` for the club (live Championship DOM).
+   * Never uses the header Select / hidden combobox options.
    */
   private lineupsTeamCardScript(
     teamName: string,
     mode: "find" | "click",
-    opponentName?: string,
   ): string {
-    return `() => {
-      const match = ${LINEUP_TEAM_LABELS_MATCH_SOURCE};
-      const want = ${JSON.stringify(teamName)};
-      const opponent = ${JSON.stringify(opponentName || "")};
-      const skipSel =
-        "[data-combobox-dropdown], [data-combobox-option], [data-combobox-target], [role='combobox'], .mantine-Select-dropdown, .mantine-Combobox-dropdown, .mantine-Combobox-option, input, [data-modal-content], .mantine-Modal-content";
-      const accordionSel =
-        "[data-accordion-control], .mantine-Accordion-control";
-      const textOf = (el) =>
-        String(el.innerText || el.textContent || "").replace(/\\s+/g, " ").trim();
-      let best = null;
-      let bestScore = -1;
-      const nodes = document.querySelectorAll(
-        "div, li, article, section, a, button, tr, p, span, h3, h4, strong",
-      );
-      for (const el of nodes) {
-        if (!(el instanceof HTMLElement) || el.closest(skipSel)) continue;
-        if (el.matches(accordionSel)) continue;
-        const t = textOf(el);
-        if (t.length < 8 || t.length > 500) continue;
-        if (!match(t, want)) continue;
-        let score = Math.max(0, 220 - t.length);
-        if (/\\bvs\\.?\\b/i.test(t)) score += 140;
-        if (opponent && match(t, opponent)) score += 40;
-        const r = el.getBoundingClientRect();
-        if (r.width >= 4 && r.height >= 8) score += 20;
-        if (el.closest("[data-accordion-panel], .mantine-Accordion-panel, .mantine-Accordion-content, .mantine-Accordion-item")) {
-          score += 30;
-        }
-        if (el.closest(accordionSel)) score -= 120;
-        if (score > bestScore) {
-          best = el;
-          bestScore = score;
-        }
-      }
-      if (!best) return false;
-      if (${mode === "click" ? "true" : "false"}) {
-        let target = best;
-        if (!/\\bvs\\.?\\b/i.test(textOf(best))) {
-          let p = best.parentElement;
-          for (let i = 0; i < 10 && p; i += 1) {
-            const pt = textOf(p);
-            if (/\\bvs\\.?\\b/i.test(pt) && pt.length <= 500 && match(pt, want)) {
-              target = p;
-              break;
-            }
-            p = p.parentElement;
-          }
-        }
-        target.scrollIntoView({ block: "center", inline: "nearest" });
-        let scroller = target.parentElement;
-        while (scroller) {
-          const cs = getComputedStyle(scroller);
-          if (/(auto|scroll)/.test(cs.overflowY) && scroller.scrollHeight > scroller.clientHeight + 2) {
-            const r = target.getBoundingClientRect();
-            const pr = scroller.getBoundingClientRect();
-            scroller.scrollTop += r.top - pr.top - pr.height / 2 + r.height / 2;
-          }
-          scroller = scroller.parentElement;
-        }
-        target.click();
-        target.dispatchEvent(new MouseEvent("click", {
-          bubbles: true,
-          cancelable: true,
-          view: window,
-        }));
-      }
-      return true;
-    }`;
+    return `(() => {
+      const find = ${LINEUP_CLUB_FIND_SOURCE};
+      return find(${JSON.stringify(teamName)}, ${JSON.stringify(mode)}, true);
+    })()`;
   }
 
   private teamNameClickVariants(teamName: string): string[] {
@@ -1160,9 +1095,9 @@ export class SorareInsideSession {
 
     const clicked = await this.clickVisibleMatchRow(page, teamName);
     if (!clicked) {
-      await evaluateTimed<boolean>(
+      await evaluateTimed<{ ok?: boolean }>(
         page,
-        this.lineupsTeamCardScript(teamName, "click", options.opponentName),
+        this.lineupsTeamCardScript(teamName, "click"),
         8_000,
       ).catch(() => false);
     }
@@ -1176,27 +1111,25 @@ export class SorareInsideSession {
     );
   }
 
-  /** Click the visible vs-row that contains the club name (plain text is fine). */
+  /** Click the visible club `a.mantine-Anchor-root`, never a hidden Select option. */
   private async clickVisibleMatchRow(
     page: Page,
     teamName: string,
   ): Promise<boolean> {
     for (const label of this.teamNameClickVariants(teamName)) {
-      const name = page.getByText(label, { exact: false }).first();
-      if (!(await name.isVisible().catch(() => false))) continue;
-      const row = name.locator(
-        'xpath=ancestor::*[contains(translate(normalize-space(.), "VS", "vs"), " vs ")][1]',
-      );
-      const target = (await row.count().catch(() => 0)) > 0 ? row : name;
-      await target
-        .click({ timeout: 4_000, force: true })
-        .catch(async () => {
-          await target.evaluate(`(el) => {
-            if (!(el instanceof HTMLElement)) return;
-            el.click();
-            el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
-          }`);
-        });
+      const anchor = page
+        .locator("a.mantine-Anchor-root")
+        .filter({ hasNot: page.locator("xpath=ancestor::*[@data-combobox-option]") })
+        .filter({ hasText: label })
+        .locator("visible=true")
+        .first();
+      if (!(await anchor.isVisible().catch(() => false))) continue;
+      await anchor.click({ timeout: 4_000 }).catch(async () => {
+        await anchor.evaluate(`(el) => {
+          if (!(el instanceof HTMLElement)) return;
+          el.click();
+        }`);
+      });
       return true;
     }
     return false;
