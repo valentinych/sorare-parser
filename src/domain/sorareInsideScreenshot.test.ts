@@ -4,8 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
+  accordionTextMatchesCompetition,
   clubFileSlug,
   findLineupClubAnchorInHtml,
+  findLineupAccordionInHtml,
   isSorareInsideGamesApiUrl,
   lineupTeamLabelsMatch,
   leagueLabel,
@@ -15,6 +17,7 @@ import {
   isSorareSideCapturedOnDisk,
   parseBenchAndDnpPlayerLists,
   parseProbabilitiesFromModalText,
+  parseProbabilitiesFromPitchCards,
   parseSorareInsideCaptureRequest,
   parseSorareInsideDiscoverRequest,
   parseSorareInsideExpandRequest,
@@ -149,6 +152,67 @@ test("findLineupClubAnchorInHtml clicks the visible Championship anchor, not the
   assert.equal(findLineupClubAnchorInHtml(html, "Not A Club FC").ok, false);
 });
 
+test("lineupTeamLabelsMatch strips 1./SV/FC/TSG and folds umlauts for Bundesliga", () => {
+  assert.equal(lineupTeamLabelsMatch("1. FSV Mainz 05", "1. FSV Mainz 05"), true);
+  assert.equal(lineupTeamLabelsMatch("Mainz 05", "1. FSV Mainz 05"), true);
+  assert.equal(lineupTeamLabelsMatch("FC Bayern München", "FC Bayern München"), true);
+  assert.equal(lineupTeamLabelsMatch("Bayern Munich", "FC Bayern München"), true);
+  assert.equal(lineupTeamLabelsMatch("Borussia Mönchengladbach", "Borussia Mönchengladbach"), true);
+  assert.equal(lineupTeamLabelsMatch("Gladbach", "Borussia Mönchengladbach"), true);
+  assert.equal(lineupTeamLabelsMatch("Sport-Club Freiburg", "Sport-Club Freiburg"), true);
+  assert.equal(lineupTeamLabelsMatch("SC Freiburg", "Sport-Club Freiburg"), true);
+  assert.equal(lineupTeamLabelsMatch("Elversberg", "SV 07 Elversberg"), true);
+  assert.equal(lineupTeamLabelsMatch("1. FC Köln", "1. FC Köln"), true);
+  assert.equal(lineupTeamLabelsMatch("Union Berlin", "1. FC Union Berlin"), true);
+  assert.equal(lineupTeamLabelsMatch("Hoffenheim", "TSG Hoffenheim"), true);
+  assert.equal(
+    lineupTeamLabelsMatch("Borussia Dortmund", "Borussia Mönchengladbach"),
+    false,
+  );
+});
+
+test("findLineupAccordionInHtml picks Germany Bundesliga, not Austria or 2. Bundesliga", () => {
+  const html = readFileSync(
+    new URL("./sorareInsideBundesligaRow.fixture.html", import.meta.url),
+    "utf8",
+  );
+  const germany = findLineupAccordionInHtml(html, "Bundesliga", "Germany", "Germany - Bundesliga");
+  assert.equal(germany.ok, true);
+  assert.match(String(germany.text), /1\. Bundesliga|Bundesliga/);
+  assert.doesNotMatch(String(germany.text), /2\. Bundesliga/);
+
+  const austria = findLineupAccordionInHtml(html, "Bundesliga", "Austria", "Austria - Bundesliga");
+  assert.equal(austria.ok, true);
+  assert.match(String(austria.text), /Bundesliga/);
+});
+
+test("findLineupClubAnchorInHtml clicks Bundesliga vs-row Anchor, not the Select option", () => {
+  const html = readFileSync(
+    new URL("./sorareInsideBundesligaRow.fixture.html", import.meta.url),
+    "utf8",
+  );
+  const mainz = findLineupClubAnchorInHtml(html, "1. FSV Mainz 05");
+  assert.equal(mainz.ok, true);
+  assert.equal(mainz.text, "1. FSV Mainz 05");
+  assert.equal(mainz.tag, "A");
+  assert.match(String(mainz.cls), /mantine-Anchor-root/);
+
+  const bayern = findLineupClubAnchorInHtml(html, "FC Bayern München");
+  assert.equal(bayern.ok, true);
+  assert.match(String(bayern.text), /Bayern/);
+  assert.match(String(bayern.cls), /mantine-Anchor-root/);
+
+  const gladbach = findLineupClubAnchorInHtml(html, "Borussia Mönchengladbach");
+  assert.equal(gladbach.ok, true);
+  assert.match(String(gladbach.text), /Mönchengladbach|Gladbach/);
+
+  const freiburg = findLineupClubAnchorInHtml(html, "Sport-Club Freiburg");
+  assert.equal(freiburg.ok, true);
+  assert.match(String(freiburg.cls), /mantine-Anchor-root/);
+
+  assert.equal(findLineupClubAnchorInHtml(html, "Not A Club FC").ok, false);
+});
+
 test("parseSorareInsideCaptureRequest + path helpers", () => {
   const req = parseSorareInsideCaptureRequest({
     gameId: "g1",
@@ -171,6 +235,29 @@ test("leagueLabel formats region - competition", () => {
     "Argentina - Liga Professional Argentina",
   );
   assert.equal(leagueLabel("England", "England Premier League"), "England Premier League");
+});
+
+test("accordion competition match keeps Bundesliga distinct from Bundesliga 2", () => {
+  assert.equal(accordionTextMatchesCompetition("Germany - Bundesliga", "Bundesliga"), true);
+  assert.equal(accordionTextMatchesCompetition("Bundesliga", "Bundesliga"), true);
+  assert.equal(accordionTextMatchesCompetition("1. Bundesliga", "Bundesliga"), true);
+  assert.equal(accordionTextMatchesCompetition("Germany - 1. Bundesliga", "Bundesliga"), true);
+  assert.equal(accordionTextMatchesCompetition("Germany - Bundesliga 2", "Bundesliga"), false);
+  assert.equal(accordionTextMatchesCompetition("2. Bundesliga", "Bundesliga"), false);
+  assert.equal(accordionTextMatchesCompetition("Germany - 2. Bundesliga", "Bundesliga"), false);
+  assert.equal(accordionTextMatchesCompetition("2. Bundesliga", "2. Bundesliga"), true);
+  assert.equal(
+    accordionTextMatchesCompetition("Germany - Bundesliga 2", "Germany - Bundesliga"),
+    false,
+  );
+  assert.equal(
+    accordionTextMatchesCompetition("Germany - Bundesliga", "Germany - Bundesliga"),
+    true,
+  );
+  // Same hardening for other division pairs.
+  assert.equal(accordionTextMatchesCompetition("Spain - Liga 2", "Liga"), false);
+  assert.equal(accordionTextMatchesCompetition("Spain - Liga", "Liga"), true);
+  assert.equal(accordionTextMatchesCompetition("Championship", "Championship"), true);
 });
 
 test("parseSorareInsideGamesPayload flattens regions", () => {
@@ -250,6 +337,73 @@ Comments
     [
       ["Cole Palmer", 85],
       ["Nicolas Jackson", 60],
+    ],
+  );
+});
+
+test("parseProbabilitiesFromModalText maps pitch badge % above the starter name", () => {
+  const players = parseProbabilitiesFromModalText(`
+80%
+53 all
+Mohamed Salah
+M. Mimaroğlu 20%
+80%
+Aral Şimşir
+N. Saviolo 20%
+`);
+  const salah = players.find((p) => p.name === "Mohamed Salah");
+  const simsir = players.find((p) => p.name === "Aral Şimşir");
+  assert.equal(salah?.percentage, 80);
+  assert.equal(simsir?.percentage, 80);
+});
+
+test("parseProbabilitiesFromPitchCards maps OUT badge to out, not bench 10%", () => {
+  const players = parseProbabilitiesFromPitchCards([
+    `OUT\nVictor Osimhen`,
+    `Victor Osimhen\nOUT`,
+    `80%\n53 all\nMohamed Salah\nM. Mimaroğlu 20%`,
+  ]);
+  const osimhen = players.filter((p) => p.name === "Victor Osimhen");
+  assert.equal(osimhen.length, 1);
+  assert.equal(osimhen[0]?.group, "out");
+  assert.equal(osimhen[0]?.percentage, null);
+  assert.equal(players.find((p) => p.name === "Mohamed Salah")?.percentage, 80);
+});
+
+test("parseBenchAndDnpPlayerLists does not default OUT/DNP names to 10%", () => {
+  const players = parseBenchAndDnpPlayerLists(`
+Bench Players
+Dermot Mee
+Victor Osimhen
+OUT
+DNP Players
+Jayden Oosterwolde
+`);
+  const osimhen = players.find((p) => p.name === "Victor Osimhen");
+  const oosterwolde = players.find((p) => p.name === "Jayden Oosterwolde");
+  const mee = players.find((p) => p.name === "Dermot Mee");
+  assert.equal(mee?.group, "bench");
+  assert.equal(mee?.percentage, 10);
+  assert.equal(osimhen?.group, "out");
+  assert.equal(osimhen?.percentage, null);
+  assert.equal(oosterwolde?.group, "out");
+  assert.equal(oosterwolde?.percentage, null);
+});
+
+test("parseProbabilitiesFromPitchCards keeps starter badge % and treats grey alt as bench", () => {
+  const players = parseProbabilitiesFromPitchCards([
+    `80%\n53 all\nMohamed Salah\nM. Mimaroğlu 20%`,
+    `60%\n53 all\nPaul Onuachu\nFranculino Djú 40%`,
+    `Marcos Rojo 75%`,
+  ]);
+  assert.deepEqual(
+    players.map((p) => [p.name, p.percentage, p.group]),
+    [
+      ["Mohamed Salah", 80, "starting"],
+      ["M. Mimaroğlu", 20, "bench"],
+      ["Paul Onuachu", 60, "starting"],
+      ["Franculino Djú", 40, "bench"],
+      ["Marcos Rojo", 75, "starting"],
     ],
   );
 });

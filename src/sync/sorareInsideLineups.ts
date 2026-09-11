@@ -13,13 +13,17 @@ import {
 } from "playwright";
 import {
   clubFileSlug,
+  competitionAccordionRegex,
+  accordionTextMatchesCompetition,
   displaySorareOutputDir,
   LINEUP_CLUB_FIND_SOURCE,
+  LINEUP_ACCORDION_FIND_SOURCE,
   isSorareInsideGamesApiUrl,
   loadSorareOutputDirConfig,
   mergeSorareInsideProbabilities,
   parseBenchAndDnpPlayerLists,
   parseProbabilitiesFromModalText,
+  parseProbabilitiesFromPitchCards,
   parseSorareInsideCaptureRequest,
   parseSorareInsideDiscoverRequest,
   parseSorareInsideExpandRequest,
@@ -496,9 +500,9 @@ export class SorareInsideSession {
     modal: ReturnType<Page["locator"]>,
     filePath: string,
     greenFilePath: string,
-  ): Promise<{ pitch: string; bench: string; dnp: string }> {
+  ): Promise<{ pitch: string; pitchCards: string[]; bench: string; dnp: string }> {
     const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
-    let sectionText = { pitch: "", bench: "", dnp: "" };
+    let sectionText = { pitch: "", pitchCards: [] as string[], bench: "", dnp: "" };
 
     this.setStatus({
       state: "running",
@@ -648,9 +652,11 @@ export class SorareInsideSession {
         .evaluate(SI_EXTRACT_SECTION_TEXT_SCRIPT)
         .catch(() => null)) ?? sectionText) as {
         pitch: string;
+        pitchCards: string[];
         bench: string;
         dnp: string;
       };
+      if (!Array.isArray(sectionText.pitchCards)) sectionText.pitchCards = [];
     } finally {
       await page
         .evaluate(`(() => {
@@ -1052,8 +1058,18 @@ export class SorareInsideSession {
 
   private teamNameClickVariants(teamName: string): string[] {
     const raw = teamName.trim();
+    const folded = raw
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "");
     const noFc = raw.replace(/\s+(fc|afc|cf|sc)\.?$/i, "").trim();
-    const words = noFc.split(/\s+/).filter(Boolean);
+    const stripped = folded
+      .replace(/^\d+\.\s*/i, "")
+      .replace(/\b(fc|afc|cf|sc|sv|tsg|fsv)\b\.?/gi, " ")
+      .replace(/\bsport-?club\b/gi, " ")
+      .replace(/\b\d{2,4}\b/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const words = stripped.split(/\s+/).filter(Boolean);
     const out: string[] = [];
     const add = (value: string) => {
       const t = value.trim();
@@ -1061,11 +1077,11 @@ export class SorareInsideSession {
       if (!out.some((item) => item.toLowerCase() === t.toLowerCase())) out.push(t);
     };
     add(raw);
+    add(folded);
     add(noFc);
-    if (words.length >= 2) add(words.slice(0, 2).join(" "));
-    if (words.length >= 3 && words[0] && words[1]) {
-      add(`${words[0]} ${words[1].slice(0, 4)}`.trim());
-    }
+    add(stripped);
+    if (words.length >= 2) add(words.slice(-2).join(" "));
+    if (words.length >= 1) add(words[words.length - 1] || "");
     return out;
   }
 
@@ -1086,10 +1102,44 @@ export class SorareInsideSession {
       teamName,
       options.opponentName,
     );
+    const clubDump = await evaluateTimed<{
+      hit?: { ok?: boolean; text?: string | null; tag?: string | null; cls?: string | null };
+      anchors?: string[];
+    }>(
+      page,
+      `(() => {
+        const find = ${LINEUP_CLUB_FIND_SOURCE};
+        const hit = find(${JSON.stringify(teamName)}, "find", false);
+        const skipSel =
+          "[data-combobox-option], [data-combobox-dropdown], [role='combobox']";
+        const anchors = [];
+        for (const el of document.querySelectorAll("a.mantine-Anchor-root")) {
+          if (el.closest(skipSel)) continue;
+          const t = String(el.innerText || el.textContent || "")
+            .replace(/\\s+/g, " ")
+            .trim();
+          if (t && t.length <= 80) anchors.push(t);
+          if (anchors.length >= 24) break;
+        }
+        return { hit, anchors };
+      })()`,
+      8_000,
+    ).catch(() => null);
+    await writeFile(
+      resolve(projectRoot, "data/sorare/debug-club-hit.json"),
+      `${JSON.stringify(
+        { teamName, present, dump: clubDump, at: new Date().toISOString() },
+        null,
+        2,
+      )}\n`,
+    ).catch(() => {});
     if (!present) {
       const league = options.leagueName ? ` in ${options.leagueName}` : "";
+      const visible = clubDump?.anchors?.length
+        ? ` Visible clubs: ${clubDump.anchors.join(" · ")}.`
+        : " No visible a.mantine-Anchor-root clubs.";
       throw new Error(
-        `No clickable "${teamName}" match on the lineups list${league} after expanding the league.`,
+        `No clickable "${teamName}" match on the lineups list${league} after expanding the league.${visible}`,
       );
     }
 
@@ -1135,12 +1185,25 @@ export class SorareInsideSession {
     return false;
   }
 
+  /**
+   * Prefer region-qualified labels. Never OR bare "Serie A" with "Italy - Serie A"
+   * — that makes `.first()` expand Brazil before Italy (same for Premier League, etc.).
+   */
   private leagueAccordionNeedles(league: SorareInsideLeague): string[] {
+    const competition = league.competitionName.trim();
     const raw = [
-      league.competitionName,
       league.label,
-      league.competitionName.split(" ").slice(-2).join(" "),
+      [league.regionName, competition].filter(Boolean).join(" - "),
+      [league.regionName, competition].filter(Boolean).join(" "),
+      competition,
     ];
+    // Live German top-flight accordion is often "1. Bundesliga", not "Bundesliga".
+    if (/^bundesliga$/i.test(competition)) {
+      raw.push("1. Bundesliga");
+      if (league.regionName.trim()) {
+        raw.push(`${league.regionName.trim()} - 1. Bundesliga`);
+      }
+    }
     const out: string[] = [];
     const seen = new Set<string>();
     for (const item of raw) {
@@ -1154,28 +1217,342 @@ export class SorareInsideSession {
     return out;
   }
 
-  private leagueAccordionControl(
+  private leagueAccordionFindScript(
+    league: SorareInsideLeague,
+    mode: "find" | "click",
+  ): string {
+    return `(() => {
+      const find = ${LINEUP_ACCORDION_FIND_SOURCE};
+      return find(
+        ${JSON.stringify(league.competitionName)},
+        ${JSON.stringify(league.regionName)},
+        ${JSON.stringify(league.label)},
+        ${JSON.stringify(mode)},
+      );
+    })()`;
+  }
+
+  private async findLeagueAccordionInPage(
+    page: Page,
+    league: SorareInsideLeague,
+    mode: "find" | "click",
+  ): Promise<{ ok: boolean; text?: string | null; count?: number } | null> {
+    const competition = league.competitionName.trim();
+    const region = league.regionName.trim();
+    if (region) {
+      const heading = page.getByText(region, { exact: true }).first();
+      if (await heading.count()) {
+        await heading.scrollIntoViewIfNeeded().catch(() => {});
+        await sleep(300);
+      }
+    }
+
+    const cards = page
+      .locator("button, [role='button']")
+      .filter({ hasText: /\d+\s+LINEUPS/i })
+      .filter({ hasText: competitionAccordionRegex(competition) });
+    let n = await cards.count().catch(() => 0);
+    if (!n) {
+      n = await page.getByText(/\d+\s+LINEUPS/i).count().catch(() => 0);
+    }
+    let bestIndex = -1;
+    let bestText: string | null = null;
+    let bestY = Number.POSITIVE_INFINITY;
+    let headingY = 0;
+    if (region) {
+      headingY =
+        (await page.getByText(region, { exact: true }).first().boundingBox().catch(() => null))
+          ?.y ?? 0;
+    }
+
+    const lineups = page.getByText(/\d+\s+LINEUPS/i);
+    const lineupsN = await lineups.count().catch(() => 0);
+    for (let i = 0; i < lineupsN; i += 1) {
+      const loc = lineups.nth(i);
+      const t = (
+        (await loc
+          .evaluate(
+            `(el) => {
+              let n = el;
+              for (let i = 0; i < 8 && n; i++) {
+                const s = String(n.innerText || n.textContent || "")
+                  .replace(/\\s+/g, " ")
+                  .trim();
+                if (/LINEUPS/i.test(s) && s.length >= 10 && s.length <= 200) return s;
+                n = n.parentElement;
+              }
+              return String(el.innerText || el.textContent || "").trim();
+            }`,
+          )
+          .catch(() => "")) || ""
+      )
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!t || t.length > 220) continue;
+      if (!accordionTextMatchesCompetition(t, competition) && !t.toLowerCase().includes(competition.toLowerCase())) {
+        continue;
+      }
+      if (
+        /^bundesliga$/i.test(competition) &&
+        /2\.\s*Bundesliga/i.test(t) &&
+        !/1\.\s*Bundesliga/i.test(t)
+      ) {
+        continue;
+      }
+      const box = await loc.boundingBox().catch(() => null);
+      const y = box?.y ?? 0;
+      if (region && headingY && y < headingY - 8) continue;
+      if (y < bestY) {
+        bestY = y;
+        bestIndex = i;
+        bestText = t.slice(0, 120);
+        if (region && headingY && y >= headingY && y < headingY + 280) break;
+      }
+    }
+
+    if (bestIndex < 0 && (await cards.count().catch(() => 0)) === 1) {
+      bestIndex = 0;
+      bestText = ((await cards.first().innerText().catch(() => "")) || "").replace(/\s+/g, " ");
+    }
+    if (bestIndex < 0) {
+      const script = this.leagueAccordionFindScript(league, mode);
+      for (const frame of page.frames()) {
+        const hit = (await frame.evaluate(script).catch(() => null)) as {
+          ok?: boolean;
+          text?: string | null;
+          count?: number;
+        } | null;
+        if (hit?.ok) return hit;
+      }
+      return null;
+    }
+    if (mode === "click") {
+      const loc = lineups.nth(bestIndex);
+      await loc.scrollIntoViewIfNeeded().catch(() => {});
+      const clickable = loc
+        .locator("xpath=ancestor-or-self::button[1] | ancestor-or-self::*[@role='button'][1]")
+        .first();
+      if (await clickable.count().catch(() => 0)) {
+        await clickable.click({ timeout: 4_000 }).catch(async () => {
+          await loc.click({ force: true, timeout: 4_000 }).catch(() => {});
+        });
+      } else {
+        await loc.click({ timeout: 4_000 }).catch(async () => {
+          await loc.click({ force: true, timeout: 4_000 }).catch(() => {});
+        });
+      }
+    }
+    return { ok: true, text: bestText, count: lineupsN };
+  }
+
+  private leagueAccordionItems(
     page: Page,
     league: SorareInsideLeague,
   ): ReturnType<Page["locator"]> {
-    const needles = this.leagueAccordionNeedles(league);
-    const re = new RegExp(
-      needles.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"),
-      "i",
-    );
-    const item = page
+    const competition = league.competitionName.trim();
+    if (competition.length < 2) {
+      return page.locator("[data-accordion-item], .mantine-Accordion-item").nth(-1);
+    }
+    // Exact title: "Bundesliga" must not match "Bundesliga 2" / "2. Bundesliga".
+    const re = competitionAccordionRegex(competition);
+    return page
       .locator("[data-accordion-item], .mantine-Accordion-item")
-      .filter({ hasText: re })
-      .first();
-    return item
-      .locator("[data-accordion-control], .mantine-Accordion-control")
-      .first()
-      .or(
-        page
+      .filter({ hasText: re });
+  }
+
+  private async accordionItemMatchesRegion(
+    item: ReturnType<Page["locator"]>,
+    league: SorareInsideLeague,
+  ): Promise<boolean> {
+    const region = league.regionName.trim();
+    const code = league.regionCode.trim();
+    if (!region && !code) return true;
+    return item.evaluate(
+      (el, hints: { region: string; code: string; label: string }) => {
+        const hay = `${el.textContent || ""} ${el.getAttribute("aria-label") || ""}`.toLowerCase();
+        if (hints.label && hay.includes(hints.label.toLowerCase())) return true;
+        if (hints.region && hay.includes(hints.region.toLowerCase())) return true;
+        for (const node of el.querySelectorAll("[aria-label], img, svg, [title]")) {
+          const bits = [
+            node.getAttribute("aria-label") || "",
+            node.getAttribute("alt") || "",
+            node.getAttribute("title") || "",
+            node.getAttribute("src") || "",
+            node.textContent || "",
+          ]
+            .join(" ")
+            .toLowerCase();
+          if (hints.region && bits.includes(hints.region.toLowerCase())) return true;
+          if (hints.code) {
+            const c = hints.code.toLowerCase();
+            if (
+              bits === c ||
+              bits.includes(`/${c}/`) ||
+              bits.includes(`/${c}.`) ||
+              bits.includes(`_${c}_`) ||
+              bits.includes(`-${c}-`) ||
+              bits.includes(`flag-${c}`) ||
+              bits.includes(`flags/${c}`) ||
+              bits.includes(` ${c} `)
+            ) {
+              return true;
+            }
+          }
+        }
+        return false;
+      },
+      {
+        region,
+        code,
+        label: league.label.trim(),
+      },
+    );
+  }
+
+  /**
+   * Resolve the correct league accordion control. Shared names (Serie A, Premier
+   * League, Bundesliga, Primera División) must be disambiguated by region.
+   */
+  private async resolveLeagueAccordionControl(
+    page: Page,
+    league: SorareInsideLeague,
+  ): Promise<ReturnType<Page["locator"]> | null> {
+    for (const needle of this.leagueAccordionNeedles(league)) {
+      // Skip bare competitionName here when a region exists — handled below.
+      if (
+        league.regionName.trim() &&
+        needle.toLowerCase() === league.competitionName.trim().toLowerCase()
+      ) {
+        continue;
+      }
+      // Exact title boundaries so "Germany - Bundesliga" ≠ "Germany - Bundesliga 2".
+      const re = competitionAccordionRegex(needle);
+      const control = page
+        .locator("[data-accordion-control], .mantine-Accordion-control")
+        .filter({ hasText: re })
+        .first();
+      if (await control.count()) return control;
+    }
+
+    const items = this.leagueAccordionItems(page, league);
+    const count = await items.count();
+    if (!count) return null;
+
+    // When region is known, never accept the first lone "Serie A" / "Premier League"
+    // while the sibling league may still be below the fold (Brazil before Italy).
+    for (let i = 0; i < count; i += 1) {
+      const item = items.nth(i);
+      if (await this.accordionItemMatchesRegion(item, league)) {
+        return item
           .locator("[data-accordion-control], .mantine-Accordion-control")
-          .filter({ hasText: re })
-          .first(),
-      );
+          .first();
+      }
+    }
+
+    if (!league.regionName.trim() && count === 1) {
+      return items
+        .first()
+        .locator("[data-accordion-control], .mantine-Accordion-control")
+        .first();
+    }
+
+    // Ambiguous shared competition name without a region cue yet — keep scrolling.
+    return null;
+  }
+
+  private async setAccordionExpanded(
+    control: ReturnType<Page["locator"]>,
+    expanded: boolean,
+  ): Promise<void> {
+    const current = await control.getAttribute("aria-expanded");
+    const want = expanded ? "true" : "false";
+    if (current === want) return;
+    await control.click({ timeout: 5_000 }).catch(() => {});
+    await sleep(400);
+    const still = await control.getAttribute("aria-expanded");
+    if (still !== want) {
+      await control.click({ timeout: 5_000 }).catch(() => {});
+      await sleep(300);
+    }
+  }
+
+  private async dumpLineupsDom(page: Page): Promise<{
+    url: string;
+    title: string;
+    accordionControls: number;
+    accordionItems: number;
+    accordionLike: number;
+    bundesligaHits: string[];
+    bodySample: string;
+  }> {
+    const dump =
+      (await evaluateTimed<{
+        title: string;
+        accordionControls: number;
+        accordionItems: number;
+        accordionLike: number;
+        bundesligaHits: string[];
+        bodySample: string;
+      }>(
+        page,
+        `() => {
+          const textOf = (el) =>
+            String(el.innerText || el.textContent || "").replace(/\\s+/g, " ").trim();
+          const bundesligaHits = [];
+          for (const el of document.querySelectorAll("button, [role='button'], h2, h3, p, a")) {
+            const t = textOf(el);
+            if (/bundesliga/i.test(t) && t.length < 80) bundesligaHits.push(t.slice(0, 80));
+            if (bundesligaHits.length >= 12) break;
+          }
+          return {
+            title: document.title || "",
+            accordionControls: document.querySelectorAll(
+              "[data-accordion-control], .mantine-Accordion-control",
+            ).length,
+            accordionItems: document.querySelectorAll(
+              "[data-accordion-item], .mantine-Accordion-item",
+            ).length,
+            accordionLike: document.querySelectorAll("[class*='ccordion']").length,
+            bundesligaHits,
+            bodySample: String(document.body && document.body.innerText || "")
+              .replace(/\\s+/g, " ")
+              .trim()
+              .slice(0, 500),
+          };
+        }`,
+        8_000,
+      ).catch(() => null)) || {
+        title: "",
+        accordionControls: 0,
+        accordionItems: 0,
+        accordionLike: 0,
+        bundesligaHits: [],
+        bodySample: "",
+      };
+    const out = { url: page.url(), ...dump };
+    await writeFile(
+      resolve(projectRoot, "data/sorare/debug-accordion.json"),
+      `${JSON.stringify(out, null, 2)}\n`,
+    ).catch(() => {});
+    await page
+      .screenshot({
+        path: resolve(projectRoot, "data/sorare/debug-lineups.png"),
+        fullPage: false,
+      })
+      .catch(() => {});
+    return out;
+  }
+
+  private async listAccordionTitles(page: Page): Promise<string[]> {
+    return (
+      (await evaluateTimed<string[]>(
+        page,
+        `() => [...document.querySelectorAll("[data-accordion-control], .mantine-Accordion-control, [class*='Accordion-control']")]
+          .map((el) => String(el.innerText || el.textContent || "").replace(/\\s+/g, " ").trim())
+          .filter(Boolean)`,
+        8_000,
+      ).catch(() => [])) || []
+    );
   }
 
   private async resetLineupsScroll(page: Page): Promise<void> {
@@ -1200,38 +1577,121 @@ export class SorareInsideSession {
   private async expandLeagueAccordion(
     page: Page,
     league: SorareInsideLeague,
+    options: { teamName?: string; opponentName?: string } = {},
   ): Promise<void> {
+    const label = league.label || league.competitionName;
     this.setStatus({
       state: "running",
-      message: `Expanding ${league.competitionName}…`,
+      message: `Expanding ${label}…`,
       currentUrl: page.url(),
     });
 
     await this.resetLineupsScroll(page);
+    await page
+      .locator(
+        "[data-accordion-control], .mantine-Accordion-control, [class*='Accordion-control']",
+      )
+      .first()
+      .waitFor({ state: "visible", timeout: 20_000 })
+      .catch(() => {});
+    const missAccordion = async (detail: string): Promise<never> => {
+      const dump = await this.dumpLineupsDom(page);
+      const titles = await this.listAccordionTitles(page);
+      const lineupsRows = await page.getByText(/LINEUPS/i).count().catch(() => 0);
+      const visible = titles.length
+        ? ` Visible accordions: ${titles.slice(0, 40).join(" · ")}.`
+        : dump.bundesligaHits.length
+          ? ` No accordion controls; Bundesliga text: ${dump.bundesligaHits.join(" · ")}.`
+          : ` No accordion controls were mounted (${dump.accordionLike} *ccordion, ${lineupsRows} LINEUPS rows). ${dump.bodySample}`;
+      throw new Error(`${detail}${visible}`);
+    };
     await this.scrollToLoadLazyContent(page, {
-      message: `Scrolling to ${league.competitionName} to expand the league…`,
-      untilCheck: async () =>
-        (await this.leagueAccordionControl(page, league).count()) > 0,
+      message: `Scrolling to ${label} to expand the league…`,
+      untilCheck: async () => {
+        if (await this.findLeagueAccordionInPage(page, league, "find")) {
+          return true;
+        }
+        if (await this.resolveLeagueAccordionControl(page, league)) return true;
+        // With a club hint, wait until every namesake accordion is mounted
+        // (e.g. Brazil + Italy Serie A) so try-each can pick the right one.
+        if (options.teamName && league.regionName.trim()) {
+          return (await this.leagueAccordionItems(page, league).count()) >= 2;
+        }
+        return false;
+      },
       requireUntil: true,
-      untilMissError: `Could not find "${league.competitionName}" league accordion on the lineups page.`,
+      untilMissError: `Could not find "${label}" league accordion on the lineups page.`,
+    }).catch(async (error: unknown) => {
+      const base = error instanceof Error ? error.message : String(error);
+      await missAccordion(base);
     });
 
-    const control = this.leagueAccordionControl(page, league);
-    if (!(await control.count())) {
-      throw new Error(
-        `Could not find "${league.competitionName}" league accordion on the lineups page.`,
+    const clicked = await this.findLeagueAccordionInPage(page, league, "click");
+    if (clicked?.ok) {
+      await sleep(400);
+      if (!options.teamName) return;
+      if (
+        await this.lineupsTeamCardPresent(
+          page,
+          options.teamName,
+          options.opponentName,
+        )
+      ) {
+        return;
+      }
+    }
+
+    const control = await this.resolveLeagueAccordionControl(page, league);
+    if (control && (await control.count())) {
+      await this.setAccordionExpanded(control, true);
+      if (!options.teamName) return;
+      if (
+        await this.lineupsTeamCardPresent(
+          page,
+          options.teamName,
+          options.opponentName,
+        )
+      ) {
+        return;
+      }
+      await this.setAccordionExpanded(control, false);
+    }
+
+    // Last resort / no region cue in the DOM: try each namesake accordion.
+    const items = this.leagueAccordionItems(page, league);
+    const count = await items.count();
+    if (!count) {
+      await missAccordion(
+        `Could not find "${label}" league accordion on the lineups page.`,
       );
     }
-    const expanded = await control.getAttribute("aria-expanded");
-    if (expanded !== "true") {
-      await control.click({ timeout: 5_000 });
-      await sleep(500);
+    if (!options.teamName) {
+      await this.setAccordionExpanded(
+        items
+          .first()
+          .locator("[data-accordion-control], .mantine-Accordion-control")
+          .first(),
+        true,
+      );
+      return;
     }
-    const still = await control.getAttribute("aria-expanded");
-    if (still === "false") {
-      await control.click({ timeout: 5_000 }).catch(() => {});
-      await sleep(400);
+    for (let i = 0; i < count; i += 1) {
+      const candidate = items
+        .nth(i)
+        .locator("[data-accordion-control], .mantine-Accordion-control")
+        .first();
+      await this.setAccordionExpanded(candidate, true);
+      const present = await this.lineupsTeamCardPresent(
+        page,
+        options.teamName,
+        options.opponentName,
+      );
+      if (present) return;
+      await this.setAccordionExpanded(candidate, false);
     }
+    throw new Error(
+      `Could not find "${options.teamName}" under any "${league.competitionName}" accordion (wanted ${label}).`,
+    );
   }
 
   async capture(body: unknown): Promise<{
@@ -1290,6 +1750,28 @@ export class SorareInsideSession {
         await sleep(1_500);
         this.lineupsFullyLoaded = false;
       }
+      const accordionSel =
+        "[data-accordion-control], .mantine-Accordion-control, [class*='Accordion-control']";
+      let accordionCount = await page.locator(accordionSel).count().catch(() => 0);
+      if (this.lineupsUrl && accordionCount === 0) {
+        this.setStatus({
+          state: "running",
+          message: `Reloading lineups so ${teamName}'s league accordion can mount…`,
+          currentUrl: this.lineupsUrl,
+        });
+        await page.goto(this.lineupsUrl, {
+          waitUntil: "domcontentloaded",
+          timeout: 60_000,
+        });
+        await sleep(1_500);
+        this.lineupsFullyLoaded = false;
+        await page
+          .locator(accordionSel)
+          .first()
+          .waitFor({ state: "visible", timeout: 20_000 })
+          .catch(() => {});
+        accordionCount = await page.locator(accordionSel).count().catch(() => 0);
+      }
 
       const league = this.leagues.find((item) => item.id === match.leagueId);
       if (!league) {
@@ -1297,17 +1779,20 @@ export class SorareInsideSession {
           `Unknown league for ${teamName}. Expand selected leagues first.`,
         );
       }
-      await this.expandLeagueAccordion(page, league);
-
       const opponent =
         request.side === "home" ? match.away.teamName : match.home.teamName;
+      await this.expandLeagueAccordion(page, league, {
+        teamName,
+        opponentName: opponent,
+      });
+
       await this.scrollToLoadLazyContent(page, {
-        message: `Scrolling expanded ${league.competitionName} for ${teamName}…`,
+        message: `Scrolling expanded ${league.label || league.competitionName} for ${teamName}…`,
         untilText: teamName,
         untilOpponent: opponent,
         requireUntil: true,
         untilMissError:
-          `No clickable "${teamName}" match on the ${league.competitionName} lineups list after expanding the league.`,
+          `No clickable "${teamName}" match on the ${league.label || league.competitionName} lineups list after expanding the league.`,
       });
 
       await this.openLineupPopup(page, match, request.side);
@@ -1335,7 +1820,12 @@ export class SorareInsideSession {
         pitchText || benchText || dnpText
           ? `${pitchText}\n${benchText}\n${dnpText}`
           : (await modal.innerText().catch(() => "")) || "";
-      const starting = parseProbabilitiesFromModalText(pitchText || modalText);
+      const fromCards = parseProbabilitiesFromPitchCards(
+        sections.pitchCards ?? [],
+      );
+      const starting = fromCards.length
+        ? fromCards
+        : parseProbabilitiesFromModalText(pitchText || modalText);
       // Ensure section headers exist for the bench/dnp parser.
       const benchAndDnp = parseBenchAndDnpPlayerLists(
         [

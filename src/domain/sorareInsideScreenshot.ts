@@ -17,8 +17,23 @@ export const LINEUP_TEAM_LABELS_MATCH_SOURCE = `(displayed, wanted) => {
       .normalize("NFKD")
       .replace(/[\\u0300-\\u036f]/g, "")
       .toLowerCase()
+      .replace(/munchen/g, "munich")
+      .replace(/koln/g, "cologne")
       .replace(/\\s+/g, " ")
       .trim();
+  const HONOR = /^(fc|afc|cf|sc|sv|tsg|fsv|rb|vfb|vfl|as|us|ac|ssc|rc)$/;
+  const GENERIC = { borussia: 1, bayer: 1, sport: 1, club: 1, the: 1 };
+  const coreWords = (value) =>
+    fold(value)
+      .replace(/^\\d+\\.\\s*/, "")
+      .replace(/\\bsport-?club\\b/g, " ")
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean)
+      .filter((w) => !HONOR.test(w) && !/^\\d+$/.test(w));
+  const distinctive = (value) =>
+    coreWords(value)
+      .filter((w) => w.length >= 4 && !GENERIC[w])
+      .join(" ");
   const stripFc = (value) =>
     fold(value).replace(/\\s+(fc|afc|cf|sc)\\.?$/i, "").trim();
   const slug = (value) =>
@@ -40,6 +55,25 @@ export const LINEUP_TEAM_LABELS_MATCH_SOURCE = `(displayed, wanted) => {
     const rest = longer.slice(shorter.length + 1).split("-");
     return rest.length > 0 && rest.every((t) => DROP[t]);
   };
+  const wordIn = (w, list) =>
+    list.some(
+      (l) =>
+        l === w ||
+        (w.length >= 4 && l.startsWith(w)) ||
+        (w.length >= 6 && l.includes(w)),
+    );
+  const coresMatch = (shown, want) => {
+    const aw = distinctive(shown).split(" ").filter(Boolean);
+    const bw = distinctive(want).split(" ").filter(Boolean);
+    if (!aw.length || !bw.length) return false;
+    if (aw.join(" ") === bw.join(" ")) return true;
+    const shorter = aw.length <= bw.length ? aw : bw;
+    const longer = aw.length <= bw.length ? bw : aw;
+    if (!shorter.every((w) => wordIn(w, longer))) return false;
+    const rest = longer.filter((l) => !shorter.some((w) => wordIn(w, [l])));
+    if (shorter.length === 1 && longer.length === 1) return true;
+    return rest.length === 0 || rest.every((t) => DROP[t] || GENERIC[t]);
+  };
   const shown = String(displayed || "").trim();
   if (!shown || shown.length > 500) return false;
   const want = String(wanted || "").trim();
@@ -49,6 +83,7 @@ export const LINEUP_TEAM_LABELS_MATCH_SOURCE = `(displayed, wanted) => {
   const wantNoFc = stripFc(want);
   if (!wantNoFc) return false;
   if (collapsed.includes(wantFold) || collapsed.includes(wantNoFc)) return true;
+  if (coresMatch(shown, want) || coresMatch(collapsed, want)) return true;
   const wantWords = wantNoFc.split(" ");
   if (wantWords.length >= 2) {
     const two = wantWords.slice(0, 2).join(" ");
@@ -70,6 +105,7 @@ export const LINEUP_TEAM_LABELS_MATCH_SOURCE = `(displayed, wanted) => {
       .trim();
     if (chunk && slugsEqual(slug(chunk), slug(want))) return true;
     if (chunk && fold(chunk).includes(wantNoFc)) return true;
+    if (chunk && coresMatch(chunk, want)) return true;
     if (
       chunk &&
       stripFc(chunk).length >= 8 &&
@@ -164,6 +200,91 @@ export const LINEUP_CLUB_FIND_SOURCE = `(want, mode, requireVisible) => {
   };
 }`;
 
+/**
+ * Live lineups (2026-09-11): region heading ("Germany") then a competition
+ * card ("Bundesliga" / "1. Bundesliga" + "18 LINEUPS"), not always
+ * `.mantine-Accordion-control` with "Germany - Bundesliga".
+ */
+export const LINEUP_ACCORDION_FIND_SOURCE = `(wantCompetition, wantRegion, wantLabel, mode) => {
+  const fold = (value) =>
+    String(value || "")
+      .normalize("NFKD")
+      .replace(/[\\u0300-\\u036f]/g, "")
+      .toLowerCase()
+      .replace(/\\s+/g, " ")
+      .trim();
+  const textOf = (el) =>
+    String((el.innerText != null ? el.innerText : el.textContent) || "")
+      .replace(/\\s+/g, " ")
+      .trim();
+  const want = fold(wantCompetition);
+  const region = fold(wantRegion);
+  const label = fold(wantLabel);
+  if (!want) return { ok: false, text: null, tag: null, count: 0 };
+  const isBl = want === "bundesliga";
+  const matchesComp = (raw) => {
+    const f = fold(raw);
+    if (!f.includes(want)) return false;
+    if (isBl && /(?:^|\\s)2\\.\\s*bundesliga\\b/.test(f)) return false;
+    if (isBl && /bundesliga\\s*2\\b/.test(f)) return false;
+    return true;
+  };
+  const regionNear = (el) => {
+    if (!region) return true;
+    let p = el;
+    while (p) {
+      let s = p.previousElementSibling;
+      while (s) {
+        const ht = fold(textOf(s));
+        if (ht.length > 0 && ht.length < 60 && (ht === region || ht.startsWith(region + " "))) {
+          return true;
+        }
+        s = s.previousElementSibling;
+      }
+      p = p.parentElement;
+    }
+    return false;
+  };
+  const cands = [];
+  const seen = new Set();
+  const add = (el) => {
+    if (!el || seen.has(el)) return;
+    const t = textOf(el);
+    if (!t || t.length > 180) return;
+    if (!matchesComp(t)) return;
+    seen.add(el);
+    cands.push(el);
+  };
+  for (const el of document.querySelectorAll(
+    "button, [role='button'], [data-accordion-control], [class*='Accordion-control']",
+  )) {
+    add(el);
+  }
+  if (!cands.length) {
+    for (const el of document.querySelectorAll("div, button, [role='button']")) {
+      const t = textOf(el);
+      if (!/\\d+\\s+lineups/i.test(t)) continue;
+      add(el);
+    }
+  }
+  let best = cands.find((el) => regionNear(el)) || null;
+  if (!best && cands.length === 1) best = cands[0];
+  if (!best) return { ok: false, text: null, tag: null, count: cands.length };
+  if (mode === "click") {
+    if (best.scrollIntoView) best.scrollIntoView({ block: "center", inline: "nearest" });
+    const clickable =
+      (best.closest && best.closest("button, [role='button'], [data-accordion-control]")) ||
+      best;
+    if (typeof clickable.click === "function") clickable.click();
+  }
+  return {
+    ok: true,
+    text: textOf(best).slice(0, 120),
+    tag: best.tagName || null,
+    count: cands.length,
+  };
+}`;
+
 type LineupClubFindResult = {
   ok: boolean;
   text: string | null;
@@ -186,6 +307,33 @@ export function findLineupClubAnchorInHtml(
     requireVisible: boolean,
   ) => LineupClubFindResult;
   return find(teamName, "find", false);
+}
+
+type LineupAccordionFindResult = {
+  ok: boolean;
+  text: string | null;
+  tag: string | null;
+  count: number;
+};
+
+/** Run the league-card finder against saved lineups HTML (no browser). */
+export function findLineupAccordionInHtml(
+  html: string,
+  competition: string,
+  region = "",
+  label = "",
+): LineupAccordionFindResult {
+  const { document } = parseHTML(`<!doctype html><html><body>${html}</body></html>`);
+  const find = new Function(
+    "document",
+    `return ${LINEUP_ACCORDION_FIND_SOURCE};`,
+  )(document) as (
+    wantCompetition: string,
+    wantRegion: string,
+    wantLabel: string,
+    mode: "find" | "click",
+  ) => LineupAccordionFindResult;
+  return find(competition, region, label, "find");
 }
 
 export const SORARE_INSIDE_ORIGIN = "https://sorareinside.com";
@@ -438,6 +586,40 @@ export function leagueLabel(regionName: string, competitionName: string): string
   if (!competition) return region;
   if (competition.toLowerCase().startsWith(region.toLowerCase())) return competition;
   return `${region} - ${competition}`;
+}
+
+function escapeRegExpLiteral(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Accordion title matcher: "Bundesliga" must not hit "Bundesliga 2" / "2. Bundesliga",
+ * and "Liga" must not hit "Liga 2". Numbered titles like "2. Bundesliga" still match themselves.
+ */
+export function competitionAccordionRegex(competition: string): RegExp {
+  const needle = competition.trim();
+  if (needle.length < 2) return /(?!)/; // never matches
+  const escaped = escapeRegExpLiteral(needle);
+  // Reject division suffixes (… 2 / … II) and mid-token continuation.
+  const after = `(?![\\p{L}\\p{N}.]|\\s*(?:\\d+|II|III)\\b)`;
+  if (/^\d/.test(needle)) {
+    return new RegExp(`(?:^|[^\\p{L}\\p{N}])${escaped}${after}`, "iu");
+  }
+  // Reject 2./3./… prefixes. Keep "1. Bundesliga" as the same top flight.
+  return new RegExp(
+    `(?:^|[^\\p{L}\\p{N}])(?<![2-9]\\.)(?<![2-9]\\.\\s)${escaped}${after}`,
+    "iu",
+  );
+}
+
+/** True when accordion text contains the competition as an exact title, not a sibling division. */
+export function accordionTextMatchesCompetition(
+  accordionText: string,
+  competition: string,
+): boolean {
+  return competitionAccordionRegex(competition).test(
+    String(accordionText || "").replace(/\s+/g, " ").trim(),
+  );
 }
 
 /** Relative path under `data/sorare/output`, e.g. `3/millwall.png`. */
@@ -697,15 +879,33 @@ export function parseSorareInsideGamesPayload(payload: unknown): {
 
 const SECTION_HEADER_RE =
   /^(starting(?:\s*xi)?|bench(?:\s*players)?|dnp(?:\s*players)?|out|reliability|high|medium|low|key|comments|updates|conversation|team analysis|injuries|potential factors|starting\s*%\s*key)\b/i;
+const PITCH_STATS_RE = /^\d{1,3}\s*all$/i;
+const BADGE_PCT_RE = /^(\d{1,3})\s*%(?:\s+\d{1,3}\s*all)?$/i;
+const PITCH_CHROME_RE =
+  /^(score|aa|da|app|pspe|high|medium|low)$/i;
+
+function isPitchChrome(name: string): boolean {
+  const t = name.trim();
+  if (PITCH_CHROME_RE.test(t)) return true;
+  if (/^%\s*\+?\s*ps$/i.test(t)) return true;
+  if (/sorareinside\.com/i.test(t)) return true;
+  if (/^(first published|updated|copy lineup url)\b/i.test(t)) return true;
+  return false;
+}
 
 function looksLikePlayerName(name: string): boolean {
   const t = name.trim();
   if (t.length < 2 || t.length > 60) return false;
   if (SECTION_HEADER_RE.test(t)) return false;
+  if (isPitchChrome(t) || PITCH_STATS_RE.test(t)) return false;
   if (/^\d{1,3}\s*%$/.test(t)) return false;
   if (/^https?:/i.test(t)) return false;
   // Prefer names with a letter (allow accents).
   return /[A-Za-zÀ-ÿ]/.test(t);
+}
+
+function isBarePlayerName(line: string): boolean {
+  return looksLikePlayerName(line) && !/\d\s*%/.test(line);
 }
 
 /** Best-effort parse of visible player % labels inside a lineup modal. */
@@ -732,6 +932,7 @@ export function parseProbabilitiesFromModalText(text: string): SorareInsidePlaye
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
+    if (PITCH_STATS_RE.test(line) || isPitchChrome(line)) continue;
     const sameLine = line.match(
       /^(.{2,60}?)\s+(\d{1,3})\s*%(?:\s*(?:chance of starting|start(?:ing)?)?)?$/i,
     );
@@ -739,14 +940,124 @@ export function parseProbabilitiesFromModalText(text: string): SorareInsidePlaye
       push(sameLine[1].trim(), Number(sameLine[2]), line);
       continue;
     }
-    // SorareInside often renders name and "75%" on adjacent lines.
-    const pctOnly = line.match(/^(\d{1,3})\s*%$/);
-    if (pctOnly && i > 0) {
-      const prev = lines[i - 1]!;
-      if (looksLikePlayerName(prev) && !/\d\s*%/.test(prev)) {
-        push(prev, Number(pctOnly[1]), `${prev} ${line}`);
+    // Badge % may sit above the photo (next line is the starter) or after the name.
+    const pctOnly = line.match(BADGE_PCT_RE);
+    if (!pctOnly) continue;
+    const pct = Number(pctOnly[1]);
+    const prev = i > 0 ? lines[i - 1]! : "";
+    const prevIsName = isBarePlayerName(prev);
+    let j = i + 1;
+    while (
+      j < lines.length &&
+      (PITCH_STATS_RE.test(lines[j]!) || isPitchChrome(lines[j]!))
+    ) {
+      j += 1;
+    }
+    const next = lines[j] ?? "";
+    const nextIsName = isBarePlayerName(next);
+    if (prevIsName) {
+      push(prev, pct, `${prev} ${pct}%`);
+    } else if (nextIsName) {
+      push(next, pct, `${next} ${pct}%`);
+    }
+  }
+  return out;
+}
+
+/**
+ * Parse one formation-card blob: yellow badge % + starter name, then grey "Alt N%".
+ * Pitch innerText of the whole pitch mixes rows; cards keep badge and name together.
+ */
+export function parseProbabilitiesFromPitchCards(
+  cards: string[],
+): SorareInsidePlayerProbability[] {
+  const out: SorareInsidePlayerProbability[] = [];
+  const seen = new Set<string>();
+  for (const card of cards) {
+    for (const row of parseOnePitchCard(card)) {
+      const key = row.name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(row);
+    }
+  }
+  return out;
+}
+
+function parseOnePitchCard(text: string): SorareInsidePlayerProbability[] {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter((line) => line && !PITCH_STATS_RE.test(line) && !isPitchChrome(line));
+  const out: SorareInsidePlayerProbability[] = [];
+  let badge: number | null = null;
+  let outBadge = false;
+  let starter: string | null = null;
+  let pendingName: string | null = null;
+  const pushOut = (name: string) => {
+    out.push({
+      name,
+      percentage: null,
+      rawLabel: "out",
+      group: "out",
+    });
+  };
+  for (const line of lines) {
+    if (/^(out|dnp)$/i.test(line)) {
+      const name = starter ?? pendingName;
+      if (name && !starter) {
+        starter = name;
+        pushOut(name);
+      }
+      outBadge = true;
+      pendingName = null;
+      continue;
+    }
+    const badgeMatch = line.match(BADGE_PCT_RE);
+    if (badgeMatch && badge == null) {
+      badge = Number(badgeMatch[1]);
+      continue;
+    }
+    const nameOut = line.match(/^(.{2,60}?)\s+out$/i);
+    if (nameOut) {
+      const name = nameOut[1]!.trim();
+      if (looksLikePlayerName(name)) {
+        if (!starter) starter = name;
+        pushOut(name);
+        pendingName = null;
+        continue;
       }
     }
+    const sameLine = line.match(/^(.{2,60}?)\s+(\d{1,3})\s*%$/);
+    if (sameLine) {
+      const name = sameLine[1]!.trim();
+      if (!looksLikePlayerName(name)) continue;
+      out.push({
+        name,
+        percentage: Number(sameLine[2]),
+        rawLabel: line,
+        group: starter ? "bench" : "starting",
+      });
+      continue;
+    }
+    if (!isBarePlayerName(line)) continue;
+    if (outBadge && !starter) {
+      starter = line;
+      pushOut(line);
+      pendingName = null;
+      continue;
+    }
+    if (starter || badge == null) {
+      pendingName = line;
+      continue;
+    }
+    starter = line;
+    out.push({
+      name: starter,
+      percentage: badge,
+      rawLabel: `${starter} ${badge}%`,
+      group: "starting",
+    });
   }
   return out;
 }
@@ -780,7 +1091,7 @@ export function parseBenchAndDnpPlayerLists(text: string): SorareInsidePlayerPro
       mode = "bench";
       continue;
     }
-    if (/^dnp\s*players?$/i.test(line) || /^dnp$/i.test(line)) {
+    if (/^dnp\s*players?$/i.test(line) || /^dnp$/i.test(line) || /^out$/i.test(line)) {
       mode = "dnp";
       continue;
     }
@@ -794,6 +1105,26 @@ export function parseBenchAndDnpPlayerLists(text: string): SorareInsidePlayerPro
     }
     if (mode === "none" || !looksLikePlayerName(line)) continue;
 
+    const nameOut = line.match(/^(.{2,60}?)\s+out$/i);
+    if (nameOut && looksLikePlayerName(nameOut[1]!.trim())) {
+      push({
+        name: nameOut[1]!.trim(),
+        percentage: null,
+        rawLabel: "out",
+        group: "out",
+      });
+      continue;
+    }
+    if (/^(out|dnp)$/i.test(lines[i + 1] ?? "")) {
+      push({
+        name: line,
+        percentage: null,
+        rawLabel: "out",
+        group: "out",
+      });
+      i += 1;
+      continue;
+    }
     const sameLine = line.match(/^(.{2,60}?)\s+(\d{1,3})\s*%$/);
     if (sameLine && mode === "bench") {
       push({
