@@ -7,11 +7,14 @@ import {
   getExpected11MappingView,
   getExpected11PremiumView,
   invalidatePremiumOddsJoinCache,
+  loadFotmobRatingAvgs,
   nextUpcomingRound,
   normalizedImplied1x2,
   PREMIUM_ODDS_CACHE_KEY,
+  relinkPremiumSquadMappings,
   removeExpected11ManualMapping,
   saveExpected11ManualMapping,
+  seasonStartIso,
 } from "./expected11Premium.js";
 import {
   peekComputed,
@@ -39,7 +42,7 @@ function database(): Database.Database {
     CREATE TABLE mantra_players (
       id INTEGER PRIMARY KEY, name TEXT NOT NULL, first_name TEXT,
       full_name TEXT, positions_json TEXT, tm_url TEXT, club_id INTEGER, club_name TEXT,
-      tournament_id INTEGER
+      tournament_id INTEGER, fotmob_player_id INTEGER
     );
     CREATE TABLE expected11_matches (
       id TEXT PRIMARY KEY, source_url TEXT NOT NULL, title TEXT NOT NULL,
@@ -79,7 +82,8 @@ function database(): Database.Database {
     CREATE TABLE fixture_odds (
       fixture_id INTEGER PRIMARY KEY, kickoff TEXT, home_odd REAL,
       draw_odd REAL, away_odd REAL, bookmaker TEXT,
-      home_cs_prob REAL, away_cs_prob REAL, popular_score TEXT
+      home_cs_prob REAL, away_cs_prob REAL,
+      home_score_prob REAL, away_score_prob REAL, popular_score TEXT
     );
     CREATE TABLE season_teams (
       season INTEGER, team_id INTEGER, name TEXT, league_id INTEGER
@@ -369,8 +373,8 @@ test("Premium lists manager squads for nearest tour with Expected11 %, win, CS, 
   db.prepare(
     `INSERT INTO fixture_odds
        (fixture_id, kickoff, home_odd, draw_odd, away_odd, bookmaker,
-        home_cs_prob, away_cs_prob, popular_score)
-     VALUES (500, '2026-08-12T18:00:00Z', 2, 4, 4, 'Book', 0.4, 0.25, '2:0')`,
+        home_cs_prob, away_cs_prob, home_score_prob, away_score_prob, popular_score)
+     VALUES (500, '2026-08-12T18:00:00Z', 2, 4, 4, 'Book', 0.4, 0.25, 0.72, 0.55, '2:0')`,
   ).run();
   db.prepare(
     `INSERT INTO mantra_fantasy_teams
@@ -403,7 +407,10 @@ test("Premium lists manager squads for nearest tour with Expected11 %, win, CS, 
   assert.equal(home.winProbability, 0.5);
   assert.equal(home.cleanSheetProbability, 0.4);
   assert.equal(home.opponentCleanSheetProbability, 0.25);
+  assert.equal(home.teamScoreProbability, 0.72);
   assert.equal(home.popularScore, "2:0");
+  assert.equal(home.seasonAvgRating, null);
+  assert.equal(home.last5AvgRating, null);
   assert.equal(home.mantraProfileUrl, "/player.html?id=777001");
   assert.equal(home.round, 1);
   const noOdds = view.rows.find((row) => row.mantraPlayerId === 3)!;
@@ -531,6 +538,39 @@ test("Premium team filter labels Mantra leagues and lists every club in those le
   assert.ok(!view.rows.some((row) => row.clubName === "Manchester City"));
 });
 
+test("Premium includes England 3 teams and skips /tables-only championships", () => {
+  const db = database();
+  db.prepare(
+    `INSERT INTO mantra_leagues (id, name, division, tournament_id)
+     VALUES (795, 'Winchester', 'C1', 26), (732, 'Paris', 'A1', 4)`,
+  ).run();
+  db.prepare(
+    `INSERT INTO mantra_fantasy_teams
+       (id, league_id, tournament_id, user_id, name, players_json)
+     VALUES (10, 795, 26, 99, 'E3 XI', '[10]'),
+            (11, 732, 4, 99, 'L1 XI', '[11]')`,
+  ).run();
+  db.prepare(
+    `INSERT INTO mantra_players
+       (id, name, first_name, full_name, positions_json, club_id, club_name, tournament_id)
+     VALUES (10, 'Clarke', 'Jack', 'Jack Clarke', '["W"]', 1, 'Ipswich', 26),
+            (11, 'Mbappe', 'Kylian', 'Kylian Mbappe', '["ST"]', 2, 'PSG', 4)`,
+  ).run();
+
+  const view = getExpected11PremiumView(
+    { now: new Date("2026-08-19T12:00:00Z") },
+    { id: 1, email: "owner@example.com", mantraManagerId: 99 },
+    db,
+  );
+  assert.deepEqual(
+    view.teams.map((team) => [team.id, team.label, team.competitionName]),
+    [[10, "E3 XI · Winchester C1", "League One"]],
+  );
+  assert.equal(view.leagues[0]?.name, "League One");
+  assert.equal(view.leagues[0]?.tournamentId, 26);
+  assert.ok(!view.teams.some((team) => team.competitionName === "Ligue 1"));
+});
+
 test("Premium keeps a Mantra league team with no upcoming fixtures", () => {
   const db = database();
   db.prepare(
@@ -577,6 +617,93 @@ test("next upcoming round skips a fully finished tour", () => {
   fixture.run(2, "2026-08-15T16:00:00Z", "Regular Season - 1", 3, 4, "FT");
   fixture.run(3, "2026-08-22T14:00:00Z", "Regular Season - 2", 1, 4, "NS");
   assert.equal(nextUpcomingRound(db, 39, 2026, Date.parse("2026-08-21T12:00:00Z")), 2);
+});
+
+test("stale NS leftovers are knownPast so last week's Expected11 % does not stick", () => {
+  const fixtures = [
+    {
+      id: 1,
+      kickoff: "2026-08-23T16:30:00Z",
+      league_id: 135,
+      season: 2026,
+      round: "Regular Season - 1",
+      status: "NS",
+      home_name: "Frosinone",
+      away_name: "Juventus",
+      home_odd: null,
+      draw_odd: null,
+      away_odd: null,
+      bookmaker: null,
+      home_cs_prob: null,
+      away_cs_prob: null,
+      popular_score: null,
+    },
+  ];
+  const now = Date.parse("2026-09-11T16:00:00Z");
+  assert.equal(
+    fixtureForMatch(
+      { homeTeam: "Frosinone", awayTeam: "Juventus" },
+      fixtures,
+      now,
+    ).knownPast,
+    true,
+  );
+  assert.equal(
+    fixtureForMatch(
+      { homeTeam: "Frosinone", awayTeam: "Juventus" },
+      fixtures,
+      now,
+    ).fixture,
+    null,
+  );
+});
+
+test("Premium drops last tour's Expected11 90% when the next Serie A round has no parse", () => {
+  const db = database();
+  db.prepare(
+    `INSERT INTO mantra_players
+       (id, name, first_name, full_name, positions_json, club_id, club_name, tournament_id)
+     VALUES (488, 'Bremer', 'Gleison', 'Gleison Bremer', '["CB"]', 8, 'Juventus', 1)`,
+  ).run();
+  db.prepare(
+    `INSERT INTO season_teams (season, team_id, name, league_id)
+     VALUES (2026, 512, 'Frosinone', 135), (2026, 496, 'Juventus', 135),
+            (2026, 487, 'Sassuolo', 135)`,
+  ).run();
+  db.prepare(
+    `INSERT INTO fixtures
+       (id, date, round, home_team_id, away_team_id, status, league_id, season)
+     VALUES (1, '2026-08-23T16:30:00Z', 'Regular Season - 1', 512, 496, 'NS', 135, 2026),
+            (2, '2026-09-12T16:00:00Z', 'Regular Season - 4', 487, 496, 'NS', 135, 2026)`,
+  ).run();
+  insertMatch(db, "19713615", "Frosinone", "Juventus", "2026-08-21T14:22:48Z");
+  db.prepare(
+    `INSERT INTO expected11_teams
+       (match_id, side, source_name, mantra_club_id, mantra_club_name, link_status)
+     VALUES ('19713615', 'away', 'Juventus', 8, 'Juventus', 'linked')`,
+  ).run();
+  db.prepare(
+    `INSERT INTO expected11_predictions
+       (match_id, team_side, lineup_group, sort_order, source_name,
+        displayed_percentage, mantra_player_id, link_status)
+     VALUES ('19713615', 'away', 'starting', 0, 'Bremer', 90, 488, 'linked')`,
+  ).run();
+  db.prepare(
+    `INSERT INTO mantra_fantasy_teams
+       (id, league_id, tournament_id, user_id, name, players_json)
+     VALUES (1, 742, 1, 99, 'Rome XI', '[488]')`,
+  ).run();
+
+  const view = getExpected11PremiumView(
+    { now: new Date("2026-09-11T16:00:00Z"), tournamentId: 1 },
+    { id: 1, email: "owner@example.com", mantraManagerId: 99 },
+    db,
+  );
+  const row = view.rows[0]!;
+  assert.equal(row.round, 4);
+  assert.equal(row.displayedPercentage, null);
+  assert.equal(row.lineupGroup, null);
+  assert.equal(row.opponent, "Sassuolo");
 });
 
 test("next upcoming round skips last week's NS leftovers and keeps this weekend", () => {
@@ -897,6 +1024,25 @@ test("premium odds-join cache keeps Expected11 % until parse invalidates it", ()
   assert.equal(fresh.rows[0]?.displayedPercentage, 45);
 });
 
+test("web GET does not rebuild premium odds-join on cache miss", () => {
+  const prev = process.env.COMPUTE_ENQUEUE;
+  process.env.COMPUTE_ENQUEUE = "0";
+  try {
+    const db = database();
+    seedKrejciPremium(db);
+    const now = new Date("2026-08-21T12:00:00Z");
+    const actor = { id: 1, email: "owner@example.com", mantraManagerId: 99 };
+    const started = Date.now();
+    const view = getExpected11PremiumView({ now }, actor, db);
+    assert.ok(Date.now() - started < 500);
+    assert.equal(view.rows[0]?.winProbability, null);
+    assert.equal(peekComputed(PREMIUM_ODDS_CACHE_KEY), undefined);
+  } finally {
+    if (prev == null) delete process.env.COMPUTE_ENQUEUE;
+    else process.env.COMPUTE_ENQUEUE = prev;
+  }
+});
+
 test("Expected11 import, mapping, and 66% backfill drop premium odds-join but keep squad cache", () => {
   const db = database();
   seedKrejciPremium(db);
@@ -988,4 +1134,122 @@ test("Expected11 import, mapping, and 66% backfill drop premium odds-join but ke
   removeExpected11ManualMapping({ sourceName: "Ladislav Krejci", mantraClubId: 10 }, db);
   assert.equal(peekComputed(PREMIUM_ODDS_CACHE_KEY), undefined);
   assert.deepEqual(peekComputed(squadKey), { teamIds: [1] });
+});
+
+test("premium squad relink maps newly ingested club names and drops odds cache", () => {
+  const db = database();
+  db.prepare(
+    `INSERT INTO mantra_players
+       (id, name, first_name, full_name, positions_json, club_id, club_name, tournament_id)
+     VALUES (30, 'Muldur', 'Mert', 'Mert Muldur', '["RB"]', 414, 'Eyüp Spor Kulübü', 21)`,
+  ).run();
+  db.prepare(
+    `INSERT INTO expected11_matches
+       (id, source_url, title, home_team, away_team, formations_json, extracted_at)
+     VALUES ('19746645', 'https://expected11.com/match/19746645/fenerbahce-vs-eyupspor',
+             'Fenerbahçe vs Eyüpspor', 'Fenerbahçe', 'Eyüpspor', '[]', '2026-08-19T00:00:00Z')`,
+  ).run();
+  db.prepare(
+    `INSERT INTO expected11_teams
+       (match_id, side, source_name, notes_json, mantra_club_id, mantra_club_name, link_status)
+     VALUES ('19746645', 'away', 'Eyüpspor', '{}', NULL, NULL, 'unmatched')`,
+  ).run();
+  db.prepare(
+    `INSERT INTO expected11_predictions
+       (match_id, team_side, lineup_group, sort_order, source_name,
+        displayed_percentage, mantra_player_id, link_status)
+     VALUES ('19746645', 'away', 'starting', 0, 'Mert Muldur', 80, NULL, 'unmatched')`,
+  ).run();
+  writeComputed(
+    PREMIUM_ODDS_CACHE_KEY,
+    "rounds:test|ttl:1",
+    { fixtures: [], expected11: [], rounds: [] },
+    { database: db },
+  );
+
+  const result = relinkPremiumSquadMappings(db);
+  assert.equal(result.teams.teamsLinked, 1);
+  assert.equal(result.teams.playersLinked, 1);
+  const team = db
+    .prepare(
+      `SELECT mantra_club_id AS clubId, mantra_club_name AS clubName, link_status AS status
+       FROM expected11_teams WHERE match_id = '19746645'`,
+    )
+    .get() as { clubId: number; clubName: string; status: string };
+  assert.equal(team.clubId, 414);
+  assert.equal(team.clubName, "Eyüp Spor Kulübü");
+  assert.equal(team.status, "linked");
+  const player = db
+    .prepare(
+      `SELECT mantra_player_id AS playerId, link_status AS status
+       FROM expected11_predictions WHERE match_id = '19746645'`,
+    )
+    .get() as { playerId: number; status: string };
+  assert.equal(player.playerId, 30);
+  assert.equal(player.status, "linked");
+  assert.equal(peekComputed(PREMIUM_ODDS_CACHE_KEY), undefined);
+});
+
+test("seasonStartIso uses July 1 UTC as the football season boundary", () => {
+  assert.equal(seasonStartIso(new Date("2026-09-12T00:00:00Z")), "2026-07-01");
+  assert.equal(seasonStartIso(new Date("2026-06-30T23:00:00Z")), "2025-07-01");
+});
+
+test("Premium FotMob ratings average this season and last 5 games", () => {
+  const db = database();
+  db.exec(`
+    CREATE TABLE fotmob_matches (
+      id INTEGER PRIMARY KEY, kickoff TEXT, phase TEXT
+    );
+    CREATE TABLE fotmob_match_players (
+      match_id INTEGER NOT NULL, player_id INTEGER NOT NULL, rating REAL,
+      PRIMARY KEY (match_id, player_id)
+    );
+  `);
+  db.prepare(
+    `INSERT INTO mantra_players
+       (id, name, first_name, full_name, positions_json, club_id, club_name,
+        tournament_id, fotmob_player_id)
+     VALUES (1, 'One', 'Player', 'Player One', '["ST"]', 10, 'Home', 11, 1001)`,
+  ).run();
+  db.prepare(
+    `INSERT INTO fotmob_matches (id, kickoff, phase) VALUES
+      (1, '2025-12-01T15:00:00Z', 'finished'),
+      (2, '2026-08-10T15:00:00Z', 'finished'),
+      (3, '2026-08-17T15:00:00Z', 'finished'),
+      (4, '2026-08-24T15:00:00Z', 'finished'),
+      (5, '2026-08-31T15:00:00Z', 'finished'),
+      (6, '2026-09-07T15:00:00Z', 'finished'),
+      (7, '2026-09-10T15:00:00Z', 'finished')`,
+  ).run();
+  db.prepare(
+    `INSERT INTO fotmob_match_players (match_id, player_id, rating) VALUES
+      (1, 1001, 9.0),
+      (2, 1001, 5.0),
+      (3, 1001, 8.0),
+      (4, 1001, 8.0),
+      (5, 1001, 8.0),
+      (6, 1001, 8.0),
+      (7, 1001, 8.0)`,
+  ).run();
+  db.prepare(
+    `INSERT INTO mantra_leagues (id, name, division, tournament_id) VALUES (651, 'Champ', 'A', 11)`,
+  ).run();
+  db.prepare(
+    `INSERT INTO mantra_fantasy_teams
+       (id, league_id, tournament_id, user_id, name, players_json)
+     VALUES (1, 651, 11, 99, 'Cardiff XI', '[1]')`,
+  ).run();
+
+  const now = new Date("2026-09-12T00:00:00Z");
+  const avgs = loadFotmobRatingAvgs(db, [1001], now);
+  assert.deepEqual(avgs.get(1001), { seasonAvg: 7.5, last5Avg: 8.0 });
+
+  const view = getExpected11PremiumView({ tournamentId: 11, now }, {
+    id: 1,
+    email: "owner@example.com",
+    mantraManagerId: 99,
+  }, db);
+  assert.equal(view.rows[0]?.seasonAvgRating, 7.5);
+  assert.equal(view.rows[0]?.last5AvgRating, 8.0);
 });

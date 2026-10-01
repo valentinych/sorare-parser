@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AF_POLL_TIMEOUT_MS, runAfPollTick } from "./liveDataPoll.js";
@@ -33,4 +35,12 @@ test("liveCompute module does not auto-start on import (argv guard)", async () =
   assert.equal(isComputedCacheEnqueueEnabled(), false);
   setComputedCacheEnqueueEnabled(true);
   assert.equal(isComputedCacheEnqueueEnabled(), true);
+});
+
+test("liveCompute skips finished-tour rebuilds until Mantra GAMES grows", async () => {
+  const src = await readFile(fileURLToPath(new URL("./liveCompute.ts", import.meta.url)), "utf8");
+  assert.match(src, /cachedSeasonIdealCovers/);
+  assert.match(src, /games=\$\{playedGames\} cached — skip/);
+  assert.match(src, /warmIdealTables\(league\.slug\)/);
+  assert.doesNotMatch(src, /invalidateIdealTableCache/);
 });

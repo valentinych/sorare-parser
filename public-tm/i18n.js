@@ -516,6 +516,12 @@ const rows = [
   ["Ручных связей пока нет", "No manual mappings yet", "Ручних зв’язків ще немає", "Ручных сувязяў пакуль няма"],
   ["Мой клуб · только мои игроки", "My club · owned players only", "Мій клуб · лише мої гравці", "Мой клуб · толькі мае гульцы"],
   ["Вероятность XI", "XI probability", "Ймовірність XI", "Імавернасць XI"],
+  ["Отчёт по составу", "Squad report", "Звіт по складу", "Справаздача па складзе"],
+  ["Минуты по турам", "Minutes by tour", "Хвилини по турах", "Хвіліны па турах"],
+  ["Оценка FotMob", "FotMob rating", "Оцінка FotMob", "Ацэнка FotMob"],
+  ["TS Mantra", "Mantra TS", "TS Mantra", "TS Mantra"],
+  ["Статус / причина", "Status / reason", "Статус / причина", "Статус / прычына"],
+  ["Замены", "Substitutions", "Заміни", "Замены"],
   ["Expected11: вероятность старта; отсутствие данных нейтрально; OUT исключается, если валидная схема заполняется без игрока", "Expected11: starting likelihood; missing data is neutral; OUT is excluded when a valid formation can be filled without the player", "Expected11: ймовірність старту; відсутні дані нейтральні; OUT виключається, якщо коректну схему можна заповнити без гравця", "Expected11: імавернасць старту; адсутныя даныя нейтральныя; OUT выключаецца, калі карэктную схему можна запоўніць без гульца"],
   ["Expected11: данных нет — отсутствие данных нейтрально", "Expected11: no data — missing data is neutral", "Expected11: даних немає — відсутні дані нейтральні", "Expected11: даных няма — адсутныя даныя нейтральныя"],
   ["Fantacalcio %", "Fantacalcio %", "Fantacalcio %", "Fantacalcio %"],
@@ -554,6 +560,54 @@ const rows = [
   ["Выбор очищен: чемпионат изменён", "Selection cleared: competition changed", "Вибір очищено: чемпіонат змінено", "Выбар ачышчаны: чэмпіянат зменены"],
   ["Выбор очищен", "Selection cleared", "Вибір очищено", "Выбар ачышчаны"],
   ["Аукционы", "Auctions", "Аукціони", "Аўкцыёны"],
+  ["Таблицы", "Tables", "Таблиці", "Табліцы"],
+  ["Сводная таблица Mantra", "Combined Mantra table", "Зведена таблиця Mantra", "Зводная табліца Mantra"],
+  ["Другие таблицы появятся позже.", "More tables will come later.", "Інші таблиці з’являться пізніше.", "Іншыя табліцы з’явяцца пазней."],
+  ["Идеальные Таблицы", "Ideal Tables", "Ідеальні Таблиці", "Ідэальныя Табліцы"],
+  ["Таблица дивизиона, если все выставили Ideal XI.", "Division table as if everyone posted their Ideal XI.", "Таблиця дивізіону, ніби всі виставили Ideal XI.", "Табліца дывізіёна, калі ўсе выставілі Ideal XI."],
+  ["клик по строке — сравнение XI", "click a row to compare XIs", "клік по рядку — порівняння XI", "клік па радку — параўнанне XI"],
+  ["Выберите дивизион", "Choose a division", "Оберіть дивізіон", "Выберыце дывізіён"],
+  ["Результаты туров", "Tour results", "Результати турів", "Вынікі тураў"],
+  ["нет архива туров", "missing tour archive", "немає архіву турів", "няма архіва тураў"],
+  ["завершённые туры", "finished rounds", "завершені тури", "завершаныя туры"],
+  ["завершённый тур", "finished round", "завершений тур", "завершаны тур"],
+  ["голы Ideal XI", "Ideal XI goals", "голи Ideal XI", "галы Ideal XI"],
+  ["Реальная таблица", "Real table", "Реальна таблиця", "Рэальная табліца"],
+  ["реальные TS", "real TS", "реальні TS", "рэальныя TS"],
+  ["счёт", "score", "рахунок", "лік"],
+  ["реальный TS", "real TS", "реальний TS", "рэальны TS"],
+  ["реальный счёт Mantra", "real Mantra score", "реальний рахунок Mantra", "рэальны лік Mantra"],
+  ["туры", "rounds", "тури", "туры"],
+  ["Нет строк таблицы для этого дивизиона.", "No table rows for this division.", "Немає рядків таблиці для цього дивізіону.", "Няма радкоў табліцы для гэтага дывізіёна."],
+  ["Моя команда", "My team", "Моя команда", "Мая каманда"],
+  ["Загрузка таблицы…", "Loading table…", "Завантаження таблиці…", "Загрузка табліцы…"],
+  ["Загрузка данных лиги", "Loading league data", "Завантаження даних ліги", "Загрузка даных лігі"],
+  ["Не удалось загрузить таблицу.", "Could not load the table.", "Не вдалося завантажити таблицю.", "Не ўдалося загрузіць табліцу."],
+  ["Нет строк таблицы для этого чемпионата.", "No table rows for this championship.", "Немає рядків таблиці для цього чемпіонату.", "Няма радкоў табліцы для гэтага чэмпіянату."],
+  ["дивизионов", "divisions", "дивізіонів", "дывізіёнаў"],
+  ["менеджеров", "managers", "менеджерів", "менеджараў"],
+  ["Выберите менеджера", "Choose a manager", "Оберіть менеджера", "Выберыце менеджара"],
+  ["Нет строк таблицы для менеджеров.", "No manager rows for this table.", "Немає рядків таблиці менеджерів.", "Няма радкоў табліцы менеджараў."],
+  ["Нет команд у этого менеджера.", "This manager has no teams.", "У цього менеджера немає команд.", "У гэтага менеджара няма каманд."],
+  ["Средние за матч по всем чемпионатам.", "Per-match averages across every championship.", "Середні за матч по всіх чемпіонатах.", "Сярэднія за матч па ўсіх чэмпіянатах."],
+  ["* Средние за матч показаны на 100 матчей (×100).", "* Per-match averages are shown per 100 matches (×100).", "* Середні за матч показані на 100 матчів (×100).", "* Сярэднія за матч паказаны на 100 матчаў (×100)."],
+  ["команд", "teams", "команд", "каманд"],
+  ["снимок", "snapshot", "знімок", "здымак"],
+  ["кэш", "cache", "кеш", "кэш"],
+  ["обновляется", "refreshing", "оновлюється", "абнаўляецца"],
+  ["свежие", "fresh", "свіжі", "свежыя"],
+  ["ошибок", "failed", "помилок", "памылак"],
+  ["Дивизион", "Division", "Дивізіон", "Дывізіён"],
+  ["Игры", "Played", "Ігри", "Гульні"],
+  ["Победы", "Wins", "Перемоги", "Перамогі"],
+  ["Ничьи", "Draws", "Нічыї", "Нічыі"],
+  ["Поражения", "Losses", "Поразки", "Паражэнні"],
+  ["Голы забитые", "GF", "Забиті голи", "Забітыя галы"],
+  ["Голы пропущенные", "GA", "Пропущені голи", "Прапушчаныя галы"],
+  ["Разница мячей", "GD", "Різниця м’ячів", "Розніца мячоў"],
+  ["Очки", "Points", "Очки", "Ачкі"],
+  ["Форма", "Form", "Форма", "Форма"],
+  ["Следующий", "Next", "Наступний", "Наступны"],
   ["Аукционы Mantra", "Mantra auctions", "Аукціони Mantra", "Аўкцыёны Mantra"],
   ["Загрузка аукционов…", "Loading auctions…", "Завантаження аукціонів…", "Загрузка аўкцыёнаў…"],
   ["Аукцион", "Auction", "Аукціон", "Аўкцыён"],
@@ -727,6 +781,39 @@ const rows = [
   ["Премьер-лига", "Premier League", "Прем’єр-ліга", "Прэм’ер-ліга"],
   ["Чемпионшип", "Championship", "Чемпіоншип", "Чэмпіёншып"],
   ["Суперлига", "Süper Lig", "Суперліга", "Суперліга"],
+["Mantra Дома", "Mantra Home", "Mantra Вдома", "Mantra Дома"],
+  ["Заявиться", "Apply", "Заявитися", "Заявіцца"],
+  ["Обновить заявку", "Update application", "Оновити заявку", "Абнавіць заяўку"],
+  ["Заявившиеся", "Applicants", "Заявники", "Заяўнікі"],
+  ["Заявка на Mantra Дома", "Mantra Home application", "Заявка на Mantra Вдома", "Заяўка на Mantra Дома"],
+  ["Нужен вход через Google. Можно выбрать оба типа аукциона.", "Google sign-in required. You can select both auction types.", "Потрібен вхід через Google. Можна обрати обидва типи аукціону.", "Патрэбен уваход праз Google. Можна выбраць абодва тыпы аўкцыёну."],
+  ["Например: Panenka United", "For example: Panenka United", "Наприклад: Panenka United", "Напрыклад: Panenka United"],
+  ["Тип аукциона", "Auction type", "Тип аукціону", "Тып аўкцыёну"],
+  ["Можно выбрать один или оба варианта.", "You can select one or both options.", "Можна обрати один або обидва варіанти.", "Можна выбраць адзін або абодва варыянты."],
+  ["Хочу обычный аукцион у себя в лиге", "I want a regular auction in my league", "Хочу звичайний аукціон у себе в лізі", "Хачу звычайны аўкцыён у сябе ў лізе"],
+  ["Хочу живой аукцион у себя в лиге", "I want a live auction in my league", "Хочу живий аукціон у себе в лізі", "Хачу жывы аўкцыён у сябе ў лізе"],
+  ["Отправить заявку", "Submit application", "Надіслати заявку", "Адправіць заяўку"],
+  ["Заявка сохранена", "Application saved", "Заявку збережено", "Заяўку захавана"],
+  ["Укажите название команды", "Enter a team name", "Вкажіть назву команди", "Укажыце назву каманды"],
+  ["Выберите хотя бы один тип аукциона", "Select at least one auction type", "Оберіть принаймні один тип аукціону", "Абярыце прынамсі адзін тып аўкцыёну"],
+  ["Обычный аукцион", "Regular auction", "Звичайний аукціон", "Звычайны аўкцыён"],
+  ["Живой аукцион", "Live auction", "Живий аукціон", "Жывы аўкцыён"],
+  ["Заявившихся", "Applicants", "Заявників", "Заяўнікаў"],
+  ["Пока никто не заявился", "No applicants yet", "Поки ніхто не заявився", "Пакуль ніхто не заявіўся"],
+  ["Когда", "When", "Коли", "Калі"],
+  ["вы", "you", "ви", "вы"],
+  ["Все клубы", "All clubs", "Усі клуби", "Усе клубы"],
+  ["Все позиции", "All positions", "Усі позиції", "Усе пазіцыі"],
+  ["Нет игроков с назначенными Mantra-позициями.", "No players with assigned Mantra positions.", "Немає гравців із призначеними Mantra-позиціями.", "Няма гульцоў з прызначанымі Mantra-пазіцыямі."],
+  ["Показано", "Showing", "Показано", "Паказана"],
+  ["из", "of", "з", "з"],
+  ["снимок", "snapshot", "знімок", "здымак"],
+  ["Ничего не найдено", "Nothing found", "Нічого не знайдено", "Нічога не знойдзена"],
+  ["Чтобы заявиться и смотреть список, войдите через Google.", "Sign in with Google to apply and view the list.", "Щоб заявитися і переглянути список, увійдіть через Google.", "Каб заявіцца і паглядзець спіс, увайдзіце праз Google."],
+  ["Игрок или клуб", "Player or club", "Гравець або клуб", "Гулец ці клуб"],
+  ["Вид", "View", "Вигляд", "Выгляд"],
+  ["Плитки", "Tiles", "Плитки", "Пліткі"],
+  ["Список", "List", "Список", "Спіс"],
 ];
 
 const messages = new Map(
@@ -1013,6 +1100,7 @@ export function setUiPreferences({ locale, timeZone } = {}) {
   if (locale && LOCALE_CODES[locale]) {
     activeLocale = locale;
     localStorage.setItem("uiLocale", locale);
+    document.cookie = `uiLocale=${encodeURIComponent(locale)}; path=/; max-age=31536000; samesite=lax`;
     document.documentElement.lang = locale === "uk" ? "uk" : locale;
   }
   if (timeZone) {
@@ -1050,8 +1138,31 @@ export function formatUiDateTime(iso, options = {}) {
   }).format(date);
 }
 
+function detectBrowserLocale() {
+  const candidates = [...(navigator.languages || []), navigator.language || ""];
+  for (const raw of candidates) {
+    const lower = String(raw || "").toLowerCase();
+    if (lower.startsWith("uk")) return "uk";
+    if (lower.startsWith("be")) return "be";
+    if (lower.startsWith("ru")) return "ru";
+    if (lower.startsWith("en")) return "en";
+  }
+  return "ru";
+}
+
+function readLocaleCookie() {
+  const parts = `; ${document.cookie}`.split("; uiLocale=");
+  if (parts.length < 2) return null;
+  const value = decodeURIComponent(parts.pop().split(";").shift() || "");
+  return LOCALE_CODES[value] ? value : null;
+}
+
 export function initI18n() {
-  activeLocale = localStorage.getItem("uiLocale") || "ru";
+  activeLocale =
+    localStorage.getItem("uiLocale") ||
+    readLocaleCookie() ||
+    detectBrowserLocale() ||
+    "ru";
   if (!LOCALE_CODES[activeLocale]) activeLocale = "ru";
   setUiPreferences({ locale: activeLocale, timeZone: activeTimeZone });
   observer = new MutationObserver((mutations) => {

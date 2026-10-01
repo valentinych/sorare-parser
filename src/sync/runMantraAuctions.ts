@@ -1133,21 +1133,52 @@ async function completeScopeAuctions(
   });
 }
 
-async function main(): Promise<void> {
-  const args = process.argv.slice(2);
-  const retryFailed = args.length === 1 && args[0] === "--retry-failed";
-  const reconcile = args.length === 1 && args[0] === "--reconcile";
-  if (args.length > 0 && !retryFailed && !reconcile) {
+export function parseMantraAuctionCollectorArgs(
+  args: string[],
+  scopes: Scope[] = SCOPES,
+): {
+  retryFailed: boolean;
+  forceDiscover: boolean;
+  requestedScopes: Scope[];
+} {
+  const retryFailed = args.includes("--retry-failed");
+  const reconcile = args.includes("--reconcile");
+  const scopeArg = args.find((arg) => arg.startsWith("--scope="));
+  const scopeKey = scopeArg?.slice("--scope=".length);
+  const allowed = new Set([
+    ...(retryFailed ? ["--retry-failed"] : []),
+    ...(reconcile ? ["--reconcile"] : []),
+    ...(scopeArg ? [scopeArg] : []),
+  ]);
+  if (args.some((arg) => !allowed.has(arg))) {
     throw new Error(
-      "Usage: npm run collect:mantra-auctions [-- --retry-failed|--reconcile]",
+      "Usage: npm run collect:mantra-auctions [-- --retry-failed|--reconcile|--scope=<key>]",
     );
   }
-  const requestedScopes = reconcile
-    ? SCOPES.filter(
-        (scope) =>
-          scope.key === "championship" || scope.key === "ekstraklasa",
-      )
-    : SCOPES;
+  if (retryFailed && (reconcile || scopeKey)) {
+    throw new Error("Do not combine --retry-failed with --reconcile or --scope=");
+  }
+  if (scopeKey && !scopes.some((scope) => scope.key === scopeKey)) {
+    throw new Error(`Unknown auction scope: ${scopeKey}`);
+  }
+  const requestedScopes = scopeKey
+    ? scopes.filter((scope) => scope.key === scopeKey)
+    : reconcile
+      ? scopes.filter(
+          (scope) =>
+            scope.key === "championship" || scope.key === "ekstraklasa",
+        )
+      : scopes;
+  return {
+    retryFailed,
+    forceDiscover: reconcile || Boolean(scopeKey),
+    requestedScopes,
+  };
+}
+
+async function main(): Promise<void> {
+  const { retryFailed, forceDiscover, requestedScopes } =
+    parseMantraAuctionCollectorArgs(process.argv.slice(2));
   const release = await acquireLock();
   let checkpoint = await loadCheckpoint();
   try {
@@ -1187,7 +1218,7 @@ async function main(): Promise<void> {
         checkpoint.failedPlayerDetails.map((failure) => failure.key),
       );
       if (
-        !reconcile &&
+        !forceDiscover &&
         existingWork.length > 0 &&
         existingWork.every(({ auction, playerBidId }) => {
           const key = mantraAuctionDetailKey(
@@ -1207,7 +1238,7 @@ async function main(): Promise<void> {
         }
         continue;
       }
-      const needsDiscovery = reconcile || scope.leagueIds.some((leagueId) => {
+      const needsDiscovery = forceDiscover || scope.leagueIds.some((leagueId) => {
         const missingVerifiedAuction = (
           VERIFIED_MANTRA_AUCTION_IDS[leagueId] ?? []
         ).some(
@@ -1284,7 +1315,7 @@ async function main(): Promise<void> {
                 auction.auctionId === auctionId,
             ),
         );
-        if (!reconcile && discovered.has(leagueId) && !missingVerifiedAuction) continue;
+        if (!forceDiscover && discovered.has(leagueId) && !missingVerifiedAuction) continue;
         console.log(`[${scope.key}] discovering Mantra league ${leagueId}`);
         const league = officialLeagues.find((item) => item.id === leagueId)!;
         let discovery: Awaited<ReturnType<typeof discoverLeague>>;

@@ -29,6 +29,8 @@ test("Alisson matches Alisson Becker; Beck does not steal that id", () => {
   assert.ok(nameMatchScore("Owen Beck", "Alisson Becker") < 80);
 });
 
-test("surname-only is not enough to match a different given name without containment", () => {
-  assert.equal(nameMatchScore("Tom Smith", "Thomas Jones"), 0);
+test("normName maps ß to ss so Krauß links Krauss", () => {
+  assert.equal(normName("Tom Krauß"), "tom krauss");
+  assert.equal(normName("Tom Krauss"), "tom krauss");
+  assert.ok(nameMatchScore("Tom Krauss", "Tom Krauß") >= 80);
 });

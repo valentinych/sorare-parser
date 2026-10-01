@@ -245,3 +245,48 @@ export async function squad(teamId: number): Promise<AfSquadPlayer[]> {
   });
   return data.response[0]?.players ?? [];
 }
+
+export type AfInjury = {
+  player: { id: number; name: string; type: string | null; reason: string | null };
+  team: { id: number; name: string };
+  fixture: { id: number; date: string | null; timestamp: number | null };
+};
+
+type AfInjuryRaw = {
+  player?: {
+    id?: number;
+    name?: string;
+    type?: string | null;
+    reason?: string | null;
+  };
+  team?: { id?: number; name?: string };
+  fixture?: { id?: number; date?: string | null; timestamp?: number | null };
+};
+
+/** League-season absences. One request — do not call per player. */
+export async function injuriesForLeague(
+  league: number,
+  season: number,
+): Promise<AfInjury[]> {
+  const data = await get<AfInjuryRaw[]>("/injuries", { league, season });
+  return (data.response ?? []).map((row) => ({
+    player: {
+      id: Number(row.player?.id) || 0,
+      name: String(row.player?.name ?? ""),
+      type: row.player?.type != null ? String(row.player.type) : null,
+      reason: row.player?.reason != null ? String(row.player.reason) : null,
+    },
+    team: {
+      id: Number(row.team?.id) || 0,
+      name: String(row.team?.name ?? ""),
+    },
+    fixture: {
+      id: Number(row.fixture?.id) || 0,
+      date: row.fixture?.date != null ? String(row.fixture.date) : null,
+      timestamp:
+        row.fixture?.timestamp != null && Number.isFinite(Number(row.fixture.timestamp))
+          ? Number(row.fixture.timestamp)
+          : null,
+    },
+  }));
+}

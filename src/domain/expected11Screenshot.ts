@@ -34,6 +34,9 @@ export function clubFileSlug(teamName: string): string {
   const cleaned = teamName
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
+    // Turkish ı/İ are not NFD-decomposable to ASCII.
+    .replace(/ı/g, "i")
+    .replace(/İ/g, "i")
     .trim()
     .replace(/\s+(fc|afc|cf|sc)\.?$/i, "")
     .replace(/&/g, " and ");

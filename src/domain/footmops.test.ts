@@ -21,7 +21,7 @@ function database(): Database.Database {
     CREATE TABLE mantra_players (
       id INTEGER PRIMARY KEY, name TEXT NOT NULL, first_name TEXT,
       full_name TEXT, positions_json TEXT, tm_url TEXT,
-      club_id INTEGER, club_name TEXT, tournament_id INTEGER
+      club_id INTEGER, club_name TEXT, tournament_id INTEGER, fotmob_player_id INTEGER
     );
     CREATE TABLE expected11_teams (
       match_id TEXT NOT NULL, side TEXT NOT NULL, source_name TEXT,
@@ -57,7 +57,8 @@ function database(): Database.Database {
     CREATE TABLE fixture_odds (
       fixture_id INTEGER PRIMARY KEY, kickoff TEXT, home_odd REAL,
       draw_odd REAL, away_odd REAL, bookmaker TEXT,
-      home_cs_prob REAL, away_cs_prob REAL, popular_score TEXT
+      home_cs_prob REAL, away_cs_prob REAL,
+      home_score_prob REAL, away_score_prob REAL, popular_score TEXT
     );
     CREATE TABLE season_teams (
       season INTEGER, team_id INTEGER, name TEXT, league_id INTEGER
@@ -160,4 +161,141 @@ test("premium Championship rows expose футмопс and import busts odds-join
   assert.equal(whiteman?.footmopsPercentage, 40);
   assert.equal(toti?.footmopsPercentage, 60);
   assert.equal(view.counts.footmops, 2);
+});
+
+function superLigSnapshot(): FootmopsSnapshot {
+  return {
+    source: "sorareinside",
+    sourceUrl: "https://sorareinside.com",
+    league: "super-lig",
+    tour: 5,
+    extractedAt: "2026-09-11T12:39:09.620Z",
+    title: "Süper Lig tour 5",
+    matches: [
+      {
+        home: "Eyüp Spor Kulübü",
+        away: "Çaykur Rize Spor Kulübü",
+        teams: [
+          {
+            name: "Eyüp Spor Kulübü",
+            players: [
+              { name: "David Costa", percentage: 80, group: "starting" },
+            ],
+          },
+          {
+            name: "Göztepe Spor Kulübü",
+            players: [
+              { name: "Allan Godói", percentage: 70, group: "starting" },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+test("premium Super Lig rows expose футмопс after Sorare club aliases", () => {
+  const db = database();
+  db.exec(`
+    INSERT INTO mantra_players (id, name, first_name, full_name, club_id, club_name, tournament_id)
+    VALUES
+      (17597, 'Costa', 'David', 'David Costa', 373, 'Eyupspor', 21),
+      (14930, 'Godoi', 'Allan', 'Allan Godoi', 378, 'Goztepe', 21);
+    INSERT INTO mantra_leagues (id, name, division) VALUES (658, 'Istanbul', 'A1');
+    INSERT INTO mantra_fantasy_teams (id, league_id, tournament_id, user_id, name, players_json)
+    VALUES (1, 658, 21, 99, 'Lochnespor', '[17597,14930]');
+  `);
+  const imported = importFootmopsSnapshot(superLigSnapshot(), db, {
+    tournamentId: 21,
+    bustCache: false,
+  });
+  assert.equal(imported.linked, 2, imported.unmatchedPlayers);
+  assert.equal(imported.unmatched, 0);
+  const view = getExpected11PremiumView(
+    { now: new Date("2026-09-11T16:00:00Z") },
+    { id: 1, email: "owner@example.com", mantraManagerId: 99 },
+    db,
+  );
+  const costa = view.rows.find((row) => row.mantraPlayerId === 17597);
+  const godoi = view.rows.find((row) => row.mantraPlayerId === 14930);
+  assert.equal(costa?.footmopsPercentage, 80);
+  assert.equal(godoi?.footmopsPercentage, 70);
+  assert.equal(view.counts.footmops, 2);
+});
+
+test("footmops import stores DNP as out without 10%, and latest tour wins over stale bench", () => {
+  const db = database();
+  db.exec(`
+    INSERT INTO mantra_players (id, name, first_name, full_name, club_id, club_name, tournament_id)
+    VALUES (1275, 'Osimhen', 'Victor', 'Victor Osimhen', 360, 'Galatasaray', 21);
+  `);
+  importFootmopsSnapshot(
+    {
+      source: "sorareinside",
+      sourceUrl: "https://sorareinside.com",
+      league: "super-lig",
+      tour: 4,
+      extractedAt: "2026-09-04T15:32:32.120Z",
+      title: "Süper Lig tour 4",
+      matches: [
+        {
+          home: "Galatasaray Spor Kulübü",
+          away: "",
+          teams: [
+            {
+              name: "Galatasaray Spor Kulübü",
+              players: [
+                { name: "Victor Osimhen", percentage: 10, group: "bench" },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    db,
+    { tournamentId: 21, bustCache: false },
+  );
+  assert.equal(footmopsByPlayer(db).get(1275)?.displayedPercentage, 10);
+  assert.equal(footmopsByPlayer(db).get(1275)?.lineupGroup, "bench");
+
+  const imported = importFootmopsSnapshot(
+    {
+      source: "sorareinside",
+      sourceUrl: "https://sorareinside.com",
+      league: "super-lig",
+      tour: 5,
+      extractedAt: "2026-09-11T12:30:24.012Z",
+      title: "Süper Lig tour 5",
+      matches: [
+        {
+          home: "Galatasaray Spor Kulübü",
+          away: "",
+          teams: [
+            {
+              name: "Galatasaray Spor Kulübü",
+              players: [
+                { name: "Victor Osimhen", percentage: null, group: "out" },
+                { name: "Uğurcan Çakır", percentage: 60, group: "starting" },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    db,
+    { tournamentId: 21, bustCache: false },
+  );
+  assert.equal(imported.players, 2);
+  const hint = footmopsByPlayer(db).get(1275);
+  assert.equal(hint?.lineupGroup, "out");
+  assert.equal(hint?.displayedPercentage, null);
+  const stored = db
+    .prepare(
+      `SELECT lineup_group AS lineupGroup, displayed_percentage AS pct
+       FROM footmops_predictions
+       WHERE tour = 5 AND source_player = 'Victor Osimhen'`,
+    )
+    .get() as { lineupGroup: string; pct: number | null };
+  assert.equal(stored.lineupGroup, "out");
+  assert.equal(stored.pct, null);
 });

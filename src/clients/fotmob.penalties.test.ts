@@ -4,6 +4,7 @@ import {
   applyPenaltiesFromEvents,
   classifyPenaltyEvent,
   penaltyMissedFromStatsBlock,
+  penaltySavedFromStatsBlock,
   type FotmobPlayerRating,
 } from "./fotmob.js";
 import { MANTRA_SCORING, scorePlayer, type PlayerMatchStats } from "../lib/mantraScoring.js";
@@ -333,4 +334,50 @@ test("Mouandilmadji real stats: pen goal + miss + penWon — no penScored stack"
     bd!.total,
     7.77 + MANTRA_SCORING.goal.ST + MANTRA_SCORING.penaltyEarned + MANTRA_SCORING.penaltyMissed,
   );
+});
+
+test("FotMob label 'Saved penalties' / key saved_penalties is a GK save", () => {
+  assert.equal(
+    penaltySavedFromStatsBlock({
+      "Saved penalties": { key: "saved_penalties", stat: { value: 1, type: "integer" } },
+    }),
+    1,
+  );
+  assert.equal(
+    penaltySavedFromStatsBlock({
+      "Saves from penalty": { stat: { value: 2 } },
+    }),
+    2,
+  );
+  assert.equal(penaltySavedFromStatsBlock({ Saves: { stat: { value: 4 } } }), 0);
+});
+
+test("scorePlayer: GK penalty save is +3 (Mantra caught_penalty)", () => {
+  const bd = scorePlayer({
+    native: ["GK"],
+    slotAccepted: ["GK"],
+    stats: blankStats({
+      rating: 8.94,
+      saves: 2,
+      penaltiesSaved: 1,
+      minutes: 90,
+    }),
+    teamCleanSheet: true,
+  });
+  assert.ok(bd);
+  assert.equal(bd!.events.find((e) => e.key === "penSave")?.delta, MANTRA_SCORING.penaltySaved);
+  assert.equal(bd!.events.find((e) => e.key === "cs")?.delta, 1.5);
+  assert.equal(bd!.total, 8.94 + 1.5 + MANTRA_SCORING.penaltySaved);
+});
+
+test("scorePlayer: outfield player does not get GK pen-save bonus", () => {
+  const bd = scorePlayer({
+    native: ["CB"],
+    slotAccepted: ["CB"],
+    stats: blankStats({ penaltiesSaved: 1 }),
+    teamCleanSheet: false,
+  });
+  assert.ok(bd);
+  assert.equal(bd!.events.some((e) => e.key === "penSave"), false);
+  assert.equal(bd!.total, 6);
 });

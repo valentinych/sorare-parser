@@ -76,6 +76,14 @@ function insertFotmob(row: {
   ).run(row.matchId, row.playerId, row.name, row.team);
 }
 
+test("Borussia Mbach aliases to FotMob Mönchengladbach", () => {
+  assert.equal(canonicalClubName("Borussia Mbach"), "borussia mbach");
+  assert.equal(canonicalClubName("Borussia Mönchengladbach"), "borussia mbach");
+  assert.ok(clubsMatch("Borussia Mbach", "Borussia Mönchengladbach"));
+  assert.ok(clubsMatch("Borussia Mönchengladbach", "Borussia Mbach"));
+  assert.equal(clubsMatch("Borussia Mbach", "Borussia Dortmund"), false);
+});
+
 test("AC Milan aliases to Milan in both directions", () => {
   assert.equal(canonicalClubName("AC Milan"), "milan");
   assert.equal(canonicalClubName("Milan"), "milan");
@@ -98,6 +106,10 @@ test("Super Lig club aliases survive Turkish characters and extra tokens", () =>
   assert.ok(clubsMatch("Amed", "Amed SK"));
   assert.ok(clubsMatch("Corum", "Çorum FK"));
   assert.ok(clubsMatch("Erzurumspor", "Erzurumspor FK"));
+  assert.ok(clubsMatch("Eyupspor", "Eyüp Spor Kulübü"));
+  assert.ok(clubsMatch("Rizespor", "Çaykur Rize Spor Kulübü"));
+  assert.ok(clubsMatch("Erzurumspor", "Büyükşehir Belediye Erzurum Spor Kulübü"));
+  assert.ok(clubsMatch("Corum", "Yeni Çorumspor Spor Kulübü"));
   assert.equal(clubsMatch("Galatasaray", "Fenerbahce"), false);
   assert.equal(clubsMatch("Corum", "Galatasaray"), false);
 });
@@ -246,4 +258,145 @@ test("Chelsea Pedro Junqueira shirt aliases to FotMob João Pedro", () => {
     .prepare(`SELECT fotmob_player_id AS id FROM mantra_players WHERE id = 967`)
     .get() as { id: number | null };
   assert.equal(pedro.id, 1021382);
+});
+
+test("Arsenal Magalhaes wins FotMob 'Gabriel' over Martinelli and Jesus", () => {
+  insertMantra({ id: 1018, name: "Magalhaes", firstName: "Gabriel", club: "Arsenal" });
+  insertMantra({ id: 536, name: "Martinelli", firstName: "Gabriel", club: "Arsenal" });
+  insertMantra({ id: 789, name: "Jesus", firstName: "Gabriel", club: "Arsenal" });
+  insertFotmob({ matchId: 21, playerId: 795179, name: "Gabriel", team: "Arsenal" });
+  insertFotmob({ matchId: 21, playerId: 194635, name: "Martinelli", team: "Arsenal" });
+
+  const result = syncMantraFotmobIds(21, 71);
+  assert.ok(result.linked >= 1);
+
+  const magalhaes = db
+    .prepare(`SELECT fotmob_player_id AS id FROM mantra_players WHERE id = 1018`)
+    .get() as { id: number | null };
+  const martinelli = db
+    .prepare(`SELECT fotmob_player_id AS id FROM mantra_players WHERE id = 536`)
+    .get() as { id: number | null };
+  const jesus = db
+    .prepare(`SELECT fotmob_player_id AS id FROM mantra_players WHERE id = 789`)
+    .get() as { id: number | null };
+  assert.equal(magalhaes.id, 795179);
+  assert.equal(martinelli.id, 194635);
+  assert.equal(jesus.id, null);
+});
+
+test("Gladbach Bolin and Kleindienst link from Mantra Mbach shirts", () => {
+  insertMantra({ id: 16350, name: "Bolin", firstName: "Hugo", club: "Borussia Mbach" });
+  insertMantra({ id: 8507, name: "Kleindienst", firstName: "Tim", club: "Borussia Mbach" });
+  insertFotmob({
+    matchId: 22,
+    playerId: 1351569,
+    name: "Hugo Bolin",
+    team: "Borussia Mönchengladbach",
+  });
+  insertFotmob({
+    matchId: 22,
+    playerId: 442728,
+    name: "Tim Kleindienst",
+    team: "Borussia Mönchengladbach",
+  });
+
+  const result = syncMantraFotmobIds(21, 71);
+  assert.ok(result.linked >= 2);
+
+  const bolin = db
+    .prepare(`SELECT fotmob_player_id AS id FROM mantra_players WHERE id = 16350`)
+    .get() as { id: number | null };
+  const kleindienst = db
+    .prepare(`SELECT fotmob_player_id AS id FROM mantra_players WHERE id = 8507`)
+    .get() as { id: number | null };
+  assert.equal(bolin.id, 1351569);
+  assert.equal(kleindienst.id, 442728);
+});
+
+test("shirt aliases link Equi, Jeff Chabot, Woo-Yeong, Yehor, Talovierov", () => {
+  insertMantra({
+    id: 15194,
+    name: "Fernandez",
+    firstName: "Ezequiel",
+    club: "Bayer Leverkusen",
+  });
+  insertMantra({ id: 440, name: "Chabot", firstName: "Julian", club: "Stuttgart" });
+  insertMantra({ id: 1742, name: "Jeong", firstName: "Wooyeong", club: "Union Berlin" });
+  insertMantra({ id: 8398, name: "Yarmolyuk", firstName: "Yegor", club: "Brentford" });
+  insertMantra({ id: 10501, name: "Taloverov", firstName: "Maksym", club: "Stoke City" });
+  insertMantra({
+    id: 17352,
+    name: "El-Faouzi",
+    firstName: "Soufiane",
+    club: "Schalke 04",
+  });
+  insertMantra({ id: 6987, name: "O'Riley", firstName: "Matt", club: "Brighton" });
+  insertMantra({ id: 4490, name: "Krauss", firstName: "Tom", club: "Koln" });
+
+  insertFotmob({
+    matchId: 31,
+    playerId: 1199959,
+    name: "Equi Fernández",
+    team: "Bayer Leverkusen",
+  });
+  insertFotmob({
+    matchId: 32,
+    playerId: 867080,
+    name: "Jeff Chabot",
+    team: "VfB Stuttgart",
+  });
+  insertFotmob({
+    matchId: 33,
+    playerId: 949673,
+    name: "Woo-Yeong Jeong",
+    team: "Union Berlin",
+  });
+  insertFotmob({
+    matchId: 34,
+    playerId: 1157236,
+    name: "Yehor Yarmoliuk",
+    team: "Brentford",
+  });
+  insertFotmob({
+    matchId: 35,
+    playerId: 1075463,
+    name: "Maksym Talovierov",
+    team: "Stoke City",
+  });
+  insertFotmob({
+    matchId: 36,
+    playerId: 1249185,
+    name: "Soufian El-Faouzi",
+    team: "Schalke 04",
+  });
+  insertFotmob({
+    matchId: 37,
+    playerId: 866686,
+    name: "Matthew O'Riley",
+    team: "Brighton & Hove Albion",
+  });
+  insertFotmob({
+    matchId: 38,
+    playerId: 992060,
+    name: "Tom Krauß",
+    team: "1. FC Köln",
+  });
+
+  const result = syncMantraFotmobIds(21, 71);
+  assert.ok(result.linked >= 8);
+
+  const idOf = (id: number) =>
+    (
+      db
+        .prepare(`SELECT fotmob_player_id AS fid FROM mantra_players WHERE id = ?`)
+        .get(id) as { fid: number | null }
+    ).fid;
+  assert.equal(idOf(15194), 1199959);
+  assert.equal(idOf(440), 867080);
+  assert.equal(idOf(1742), 949673);
+  assert.equal(idOf(8398), 1157236);
+  assert.equal(idOf(10501), 1075463);
+  assert.equal(idOf(17352), 1249185);
+  assert.equal(idOf(6987), 866686);
+  assert.equal(idOf(4490), 992060);
 });

@@ -68,8 +68,13 @@ export function isLiveDraftAdmin(email: string | null | undefined): boolean {
   );
 }
 
+export function hasApiFootballKey(): boolean {
+  const key = config.apiFootballKey.trim();
+  return Boolean(key) && key !== "your_api_sports_key_here";
+}
+
 export function requireApiKey(): string {
-  if (!config.apiFootballKey || config.apiFootballKey === "your_api_sports_key_here") {
+  if (!hasApiFootballKey()) {
     throw new Error("Set API_FOOTBALL_KEY in .env (copy from .env.example)");
   }
   return config.apiFootballKey;

@@ -186,6 +186,24 @@ export function peekComputedPersisted<T>(
   return entry?.value as T | undefined;
 }
 
+/** Memory + sqlite keys with this prefix. Does not delete or recompute. */
+export function listComputedKeys(
+  prefix: string,
+  options?: { database?: Database.Database },
+): string[] {
+  const keys = new Set<string>();
+  for (const key of memory.keys()) {
+    if (key.startsWith(prefix)) keys.add(key);
+  }
+  const rows = databaseFor(options?.database)
+    .prepare(`SELECT key FROM computed_cache WHERE key LIKE ?`)
+    .all(`${prefix}%`) as Array<{ key: string }>;
+  for (const row of rows) {
+    if (row?.key) keys.add(row.key);
+  }
+  return [...keys];
+}
+
 export function writeComputed<T>(
   key: string,
   version: string,

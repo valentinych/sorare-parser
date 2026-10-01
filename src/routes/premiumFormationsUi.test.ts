@@ -226,3 +226,352 @@ test("Premium selection count survives sorting and visible filtering", async () 
     { total: 3, visible: 1 },
   );
 });
+
+test("Premium XI score weights ratings against XI% and slot CS", async () => {
+  const {
+    PREMIUM_XI_WEIGHTS: weights,
+    premiumPlayerScore,
+    premiumXiProb,
+  } = await import(helperPath);
+  const starter = {
+    positions: ["ST"],
+    seasonAvgRating: 7,
+    last5AvgRating: 7.2,
+    displayedPercentage: 85,
+    matchLabel: "Д vs Foo",
+    winProbability: 0.5,
+    cleanSheetProbability: 0.3,
+    opponentCleanSheetProbability: 0.2,
+    teamScoreProbability: 0.7,
+  };
+  const expected =
+    weights.season * 0.7 +
+    weights.form * 0.72 +
+    weights.xi * 0.85 +
+    weights.win * 0.5 +
+    weights.cs * 0.3 * 0 +
+    weights.goals * 0.7 * 1;
+  const scored = premiumPlayerScore(starter);
+  assert.equal(scored.total, Number(expected.toFixed(2)));
+  assert.equal(scored.csFactor, 0);
+  assert.equal(scored.goalWeight, 1);
+  assert.equal(premiumXiProb({ ...starter, footmopsGroup: "out" }), 0);
+  assert.equal(premiumPlayerScore({ ...starter, footmopsGroup: "out" }).xiProb, 0);
+  assert.equal(premiumPlayerScore({}).total, Number((-weights.noFixture).toFixed(2)));
+  assert.equal(premiumPlayerScore({ positions: ["CB"] }, ["CB"]).csFactor, 1 / 1.5);
+  assert.equal(premiumPlayerScore({ positions: ["CB"] }, ["CM"]).csFactor, 0);
+  assert.equal(premiumPlayerScore({ positions: ["WB"] }, ["WB"]).csFactor, 0.5 / 1.5);
+  assert.equal(premiumPlayerScore({ positions: ["WB"] }, ["W"]).csFactor, 0);
+  const noGoalsColumn = premiumPlayerScore({
+    positions: ["ST"],
+    matchLabel: "Д vs Foo",
+    opponentCleanSheetProbability: 0.25,
+  });
+  assert.equal(noGoalsColumn.pGoals, 0.75);
+  assert.equal(premiumXiProb({ ...starter, lineupGroup: "out" }), 0);
+});
+
+test("Premium XI picker maximizes score under Mantra slots and skips no-fixture", async () => {
+  const { pickBestPremiumXi } = await import(helperPath);
+  const formations = ALL_FORMATIONS.map(formation);
+  function withMatch(item, extra = {}) {
+    return {
+      ...item,
+      seasonAvgRating: 7,
+      last5AvgRating: 7,
+      displayedPercentage: 70,
+      matchLabel: "Д vs Foo",
+      winProbability: 0.4,
+      ...extra,
+    };
+  }
+  const squad = valid433().map((item) => withMatch(item));
+  const betterSt = withMatch(player(12, ["ST"], "Hot Striker"), {
+    displayedPercentage: 20,
+    last5AvgRating: 9,
+  });
+  const lockedSt = withMatch(player(11, ["ST"], "Locked Striker"), {
+    displayedPercentage: 99,
+  });
+  const fitted = pickBestPremiumXi(
+    [...squad.filter((item) => item.mantraPlayerId !== 11), lockedSt, betterSt],
+    formations,
+    ALL_POSITIONS,
+  );
+  assert.equal(fitted.error, null);
+  assert.ok(fitted.best);
+  const starterIds = fitted.best.assignments.map(
+    (item) => item.player.mantraPlayerId,
+  );
+  assert.equal(starterIds.length, 11);
+  assert.ok(starterIds.includes(11));
+  assert.equal(starterIds.includes(12), false);
+
+  const noMatchGk = withMatch(player(99, ["GK"], "Idle GK"), {
+    displayedPercentage: 99,
+    last5AvgRating: 9,
+    seasonAvgRating: 9,
+    matchLabel: null,
+    opponent: null,
+    kickoff: null,
+  });
+  const withSpareGk = pickBestPremiumXi(
+    [...squad, noMatchGk],
+    formations,
+    ALL_POSITIONS,
+  );
+  assert.ok(withSpareGk.best);
+  assert.equal(
+    withSpareGk.best.assignments.some(
+      (item) => item.player.mantraPlayerId === 99,
+    ),
+    false,
+  );
+  assert.ok(
+    withSpareGk.best.assignments.some(
+      (item) => item.player.mantraPlayerId === 1,
+    ),
+  );
+
+  const illegal = pickBestPremiumXi(
+    Array.from({ length: 11 }, (_, index) =>
+      withMatch(player(index + 1, ["ST"])),
+    ),
+    formations,
+    ALL_POSITIONS,
+  );
+  assert.match(illegal.error, /схему Mantra/);
+  assert.equal(illegal.best, null);
+});
+
+test("Premium XI picker never starts OUT when another player can fill the slot", async () => {
+  const { pickBestPremiumXi, premiumPlayerScore } = await import(helperPath);
+  const formations = ALL_FORMATIONS.map(formation);
+  function withMatch(item, extra = {}) {
+    return {
+      ...item,
+      seasonAvgRating: 7,
+      last5AvgRating: 7,
+      displayedPercentage: 70,
+      matchLabel: "Д vs Kocaelispor",
+      winProbability: 0.5,
+      ...extra,
+    };
+  }
+  const squad = valid433().map((item) => withMatch(item));
+  const osimhen = withMatch(player(11, ["ST"], "Victor Osimhen"), {
+    seasonAvgRating: 8,
+    last5AvgRating: 8,
+    displayedPercentage: null,
+    footmopsGroup: "out",
+  });
+  const sowe = withMatch(player(12, ["ST"], "Ali Sowe"), {
+    seasonAvgRating: 6,
+    last5AvgRating: 6,
+    displayedPercentage: 40,
+  });
+  const henrique = withMatch(player(13, ["FW", "ST"], "Andre Henrique"), {
+    seasonAvgRating: 6.2,
+    last5AvgRating: 5.8,
+    displayedPercentage: 55,
+  });
+  const outScore = premiumPlayerScore(osimhen);
+  assert.equal(outScore.xiProb, 0);
+  assert.ok(outScore.total > 0);
+
+  const picked = pickBestPremiumXi(
+    [...squad.filter((item) => item.mantraPlayerId !== 11), osimhen, sowe, henrique],
+    formations,
+    ALL_POSITIONS,
+  );
+  assert.equal(picked.error, null);
+  assert.ok(picked.best);
+  const starterIds = picked.best.assignments.map(
+    (item) => item.player.mantraPlayerId,
+  );
+  assert.equal(starterIds.includes(11), false);
+  assert.ok(starterIds.includes(12) || starterIds.includes(13));
+  assert.ok(
+    picked.best.extras.some((item) => item.mantraPlayerId === 11),
+  );
+
+  const expected11Out = pickBestPremiumXi(
+    [
+      ...squad.filter((item) => item.mantraPlayerId !== 11),
+      withMatch(player(11, ["ST"], "Victor Osimhen"), {
+        seasonAvgRating: 8,
+        last5AvgRating: 8,
+        displayedPercentage: null,
+        lineupGroup: "out",
+      }),
+      sowe,
+    ],
+    formations,
+    ALL_POSITIONS,
+  );
+  assert.equal(
+    expected11Out.best?.assignments.some(
+      (item) => item.player.mantraPlayerId === 11,
+    ),
+    false,
+  );
+  assert.ok(
+    expected11Out.best?.assignments.some(
+      (item) => item.player.mantraPlayerId === 12,
+    ),
+  );
+
+  const onlyOutSt = pickBestPremiumXi(
+    [...squad.filter((item) => item.mantraPlayerId !== 11), osimhen],
+    formations,
+    ALL_POSITIONS,
+  );
+  const onlyOutIds = (onlyOutSt.best?.assignments || []).map(
+    (item) => item.player.mantraPlayerId,
+  );
+  assert.equal(onlyOutIds.includes(11), false);
+});
+
+function withMatch(item, extra = {}) {
+  return {
+    ...item,
+    seasonAvgRating: 7,
+    last5AvgRating: 7,
+    displayedPercentage: 70,
+    matchLabel: "Д vs Foo",
+    winProbability: 0.4,
+    ...extra,
+  };
+}
+
+test("Premium bench never includes OUT, keeps 1 GK, and stays disjoint from XI", async () => {
+  const { pickBestPremiumXi } = await import(helperPath);
+  const formations = ALL_FORMATIONS.map(formation);
+  const squad = valid433().map((item) => withMatch(item));
+  const outCb = withMatch(player(21, ["CB"], "OUT Centre"), {
+    footmopsGroup: "out",
+    displayedPercentage: null,
+    seasonAvgRating: 9,
+    last5AvgRating: 9,
+  });
+  const e11OutW = withMatch(player(22, ["W"], "OUT Winger"), {
+    lineupGroup: "out",
+    displayedPercentage: null,
+    seasonAvgRating: 9,
+  });
+  const spareGkA = withMatch(player(31, ["GK"], "Spare GK A"), {
+    displayedPercentage: 40,
+  });
+  const spareGkB = withMatch(player(32, ["GK"], "Spare GK B"), {
+    displayedPercentage: 55,
+  });
+  const spareGkC = withMatch(player(33, ["GK"], "Spare GK C"), {
+    displayedPercentage: 30,
+  });
+  const spareCb = withMatch(player(41, ["CB"], "Spare CB"), {
+    displayedPercentage: 45,
+  });
+  const picked = pickBestPremiumXi(
+    [...squad, outCb, e11OutW, spareGkA, spareGkB, spareGkC, spareCb],
+    formations,
+    ALL_POSITIONS,
+  );
+  assert.ok(picked.best);
+  const xiIds = new Set(
+    picked.best.assignments.map((item: any) => item.player.mantraPlayerId),
+  );
+  const bench = picked.best.bench || [];
+  const benchIds = bench.map((item: any) => item.player.mantraPlayerId);
+  const benchGks = bench.filter((item: any) =>
+    (item.player.positions || []).includes("GK"),
+  );
+
+  assert.equal(benchIds.includes(21), false);
+  assert.equal(benchIds.includes(22), false);
+  assert.ok(
+    picked.best.extras.some((item: any) => item.mantraPlayerId === 21),
+  );
+  assert.equal(benchGks.length, 1);
+  assert.equal(benchGks[0].player.mantraPlayerId, 32);
+  assert.equal(benchIds.some((id: number) => xiIds.has(id)), false);
+  assert.equal(new Set(benchIds).size, benchIds.length);
+});
+
+test("Premium bench prefers a coverage CB over extra wingers", async () => {
+  const { pickBestPremiumXi } = await import(helperPath);
+  const formations = ALL_FORMATIONS.map(formation);
+  const squad = valid433().map((item) => withMatch(item));
+  const spareGk = withMatch(player(30, ["GK"], "Bench GK"), {
+    displayedPercentage: 40,
+  });
+  const spareCb = withMatch(player(40, ["CB"], "Coverage CB"), {
+    displayedPercentage: 35,
+    last5AvgRating: 6,
+  });
+  const extraWingers = Array.from({ length: 8 }, (_, index) =>
+    withMatch(player(50 + index, ["W"], `Extra Winger ${index + 1}`), {
+      displayedPercentage: 60,
+    }),
+  );
+  const picked = pickBestPremiumXi(
+    [...squad, spareGk, spareCb, ...extraWingers],
+    formations,
+    ALL_POSITIONS,
+  );
+  assert.ok(picked.best);
+  const xiIds = new Set(
+    picked.best.assignments.map((item: any) => item.player.mantraPlayerId),
+  );
+  const bench = picked.best.bench || [];
+  const benchIds = bench.map((item: any) => item.player.mantraPlayerId);
+  const benchGks = bench.filter((item: any) =>
+    (item.player.positions || []).includes("GK"),
+  );
+  const benchField = bench.filter(
+    (item: any) => !(item.player.positions || []).includes("GK"),
+  );
+
+  assert.equal(xiIds.has(40), false);
+  assert.ok(benchIds.includes(40));
+  assert.equal(benchGks.length, 1);
+  assert.equal(benchField.length, 8);
+  assert.equal(benchField.filter((item: any) => item.player.mantraPlayerId === 40).length, 1);
+  assert.ok(
+    benchField.filter((item: any) =>
+      (item.player.positions || []).includes("W"),
+    ).length <= 7,
+  );
+});
+
+test("Premium bench leaves seats empty instead of filling with OUT", async () => {
+  const { pickBestPremiumXi } = await import(helperPath);
+  const formations = ALL_FORMATIONS.map(formation);
+  const squad = valid433().map((item) => withMatch(item));
+  const spareGk = withMatch(player(30, ["GK"], "Bench GK"), {
+    displayedPercentage: 40,
+  });
+  const spareW = withMatch(player(51, ["W"], "Only spare W"), {
+    displayedPercentage: 50,
+  });
+  const outCb = withMatch(player(99, ["CB"], "OUT CB"), {
+    footmopsGroup: "out",
+    displayedPercentage: null,
+    seasonAvgRating: 9,
+    last5AvgRating: 9,
+  });
+  const picked = pickBestPremiumXi(
+    [...squad, spareGk, spareW, outCb],
+    formations,
+    ALL_POSITIONS,
+  );
+  assert.ok(picked.best);
+  const bench = picked.best.bench || [];
+  assert.equal(bench.length, 2);
+  assert.deepEqual(
+    bench.map((item: any) => item.player.mantraPlayerId).sort(),
+    [30, 51],
+  );
+  assert.ok(
+    picked.best.extras.some((item: any) => item.mantraPlayerId === 99),
+  );
+});

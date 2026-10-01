@@ -16,6 +16,7 @@ import {
 } from "../domain/managerTeam.js";
 import { topBoard, topByPosition, type PositionGroup } from "../domain/topByPosition.js";
 import { AF_LEAGUES, leagueById, uiLeagues } from "../lib/afLeagues.js";
+import { allBuilderLeagues } from "../lib/liveLeagues.js";
 
 const POSITIONS = new Set(["GK", "DEF", "MID", "ATT"]);
 
@@ -50,6 +51,18 @@ export async function ekstraklasaRoutes(app: FastifyInstance) {
     })),
     predictSeason: config.predictSeason,
     historySeason: config.season,
+  }));
+
+  app.get("/builder/leagues", async () => ({
+    leagues: allBuilderLeagues().map((l) => ({
+      slug: l.slug,
+      name: l.name,
+      afId: l.id,
+      tmCompetition: l.tmCompetition,
+      fotmobLeagueId: l.fotmobLeagueId,
+      mantraTournamentId: l.mantraTournamentId,
+      divisions: l.mantraDivisions.length,
+    })),
   }));
 
   app.get("/mantra/fantasy-teams", async (req) => {

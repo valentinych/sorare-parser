@@ -16,13 +16,22 @@ export const LINEUP_TEAM_LABELS_MATCH_SOURCE = `(displayed, wanted) => {
     String(value || "")
       .normalize("NFKD")
       .replace(/[\\u0300-\\u036f]/g, "")
+      // Turkish ı/İ are not NFD-decomposable to ASCII.
+      .replace(/ı/g, "i")
+      .replace(/İ/g, "i")
       .toLowerCase()
       .replace(/munchen/g, "munich")
       .replace(/koln/g, "cologne")
       .replace(/\\s+/g, " ")
       .trim();
   const HONOR = /^(fc|afc|cf|sc|sv|tsg|fsv|rb|vfb|vfl|as|us|ac|ssc|rc)$/;
-  const GENERIC = { borussia: 1, bayer: 1, sport: 1, club: 1, the: 1 };
+  // Kulübü / Spor / Futbol / Jimnastik are generic Turkish club suffixes.
+  const GENERIC = {
+    borussia: 1, bayer: 1, sport: 1, club: 1, the: 1,
+    kulubu: 1, spor: 1, futbol: 1, jimnastik: 1, faaliyetler: 1,
+    // Italian club suffix — "Sassuolo" must match "US Sassuolo Calcio".
+    calcio: 1,
+  };
   const coreWords = (value) =>
     fold(value)
       .replace(/^\\d+\\.\\s*/, "")
@@ -154,7 +163,12 @@ export const LINEUP_CLUB_FIND_SOURCE = `(want, mode, requireVisible) => {
     if (!requireVisible) return true;
     if (typeof el.getBoundingClientRect !== "function") return true;
     const r = el.getBoundingClientRect();
-    return r.width >= 4 && r.height >= 4;
+    if (r.width < 4 || r.height < 4) return false;
+    // Layout size alone is not enough — virtualized / off-screen clubs
+    // still have a box but click() never opens the lineup modal.
+    const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+    const vw = window.innerWidth || document.documentElement.clientWidth || 0;
+    return r.bottom > 8 && r.top < vh - 8 && r.right > 8 && r.left < vw - 8;
   };
   const clubNodes = document.querySelectorAll(
     "a.mantine-Anchor-root, p.mantine-Text-root",
@@ -189,7 +203,25 @@ export const LINEUP_CLUB_FIND_SOURCE = `(want, mode, requireVisible) => {
   }
   if (!best) return { ok: false, text: null, tag: null, cls: null };
   if (mode === "click") {
-    if (best.scrollIntoView) best.scrollIntoView({ block: "center", inline: "nearest" });
+    if (best.scrollIntoView) {
+      best.scrollIntoView({ block: "center", inline: "nearest" });
+    }
+    // Parent overflow panes often own the scroll; nudge them too.
+    let p = best.parentElement;
+    while (p && p !== document.body) {
+      try {
+        const cs = getComputedStyle(p);
+        if (/(auto|scroll)/.test(cs.overflowY) && p.scrollHeight > p.clientHeight + 2) {
+          const r = best.getBoundingClientRect();
+          const pr = p.getBoundingClientRect();
+          p.scrollTop += r.top - pr.top - pr.height / 2 + r.height / 2;
+        }
+      } catch (_) {}
+      p = p.parentElement;
+    }
+    if (best.scrollIntoView) {
+      best.scrollIntoView({ block: "center", inline: "nearest" });
+    }
     if (typeof best.click === "function") best.click();
   }
   return {
@@ -210,6 +242,8 @@ export const LINEUP_ACCORDION_FIND_SOURCE = `(wantCompetition, wantRegion, wantL
     String(value || "")
       .normalize("NFKD")
       .replace(/[\\u0300-\\u036f]/g, "")
+      .replace(/ı/g, "i")
+      .replace(/İ/g, "i")
       .toLowerCase()
       .replace(/\\s+/g, " ")
       .trim();
@@ -245,13 +279,28 @@ export const LINEUP_ACCORDION_FIND_SOURCE = `(wantCompetition, wantRegion, wantL
     }
     return false;
   };
+  const rowHasCompetition = (el) => {
+    if (matchesComp(textOf(el))) return true;
+    let n = el;
+    for (let d = 0; d < 8 && n; d++) {
+      if (n.parentElement) {
+        const kids = [...n.parentElement.children].map((c) => fold(textOf(c)));
+        const joined = kids.filter(Boolean).join(" | ");
+        if (joined.length <= 220 && matchesComp(joined)) return true;
+      }
+      const prev = n.previousElementSibling;
+      if (prev && matchesComp(textOf(prev))) return true;
+      n = n.parentElement;
+    }
+    return false;
+  };
   const cands = [];
   const seen = new Set();
   const add = (el) => {
     if (!el || seen.has(el)) return;
     const t = textOf(el);
     if (!t || t.length > 180) return;
-    if (!matchesComp(t)) return;
+    if (!matchesComp(t) && !rowHasCompetition(el)) return;
     seen.add(el);
     cands.push(el);
   };
@@ -264,7 +313,21 @@ export const LINEUP_ACCORDION_FIND_SOURCE = `(wantCompetition, wantRegion, wantL
     for (const el of document.querySelectorAll("div, button, [role='button']")) {
       const t = textOf(el);
       if (!/\\d+\\s+lineups/i.test(t)) continue;
+      // Prefer compact LINEUPS leaves; huge section blobs are filtered by length.
       add(el);
+    }
+  }
+  // Region-only fallback: first compact LINEUPS row under the region heading
+  // (Türkiye → Süper Lig when title/LINEUPS are sibling columns).
+  if (!cands.length && region) {
+    for (const el of document.querySelectorAll("div, button, [role='button'], span")) {
+      const t = textOf(el);
+      if (!/^\\d+\\s+lineups$/i.test(t)) continue;
+      if (!regionNear(el)) continue;
+      if (t.length > 40) continue;
+      seen.add(el);
+      cands.push(el);
+      break;
     }
   }
   let best = cands.find((el) => regionNear(el)) || null;
@@ -272,8 +335,33 @@ export const LINEUP_ACCORDION_FIND_SOURCE = `(wantCompetition, wantRegion, wantL
   if (!best) return { ok: false, text: null, tag: null, count: cands.length };
   if (mode === "click") {
     if (best.scrollIntoView) best.scrollIntoView({ block: "center", inline: "nearest" });
+    // Title / LINEUPS text often only highlights the row (green border). Prefer
+    // the right-side chevron / last button in the compact league card.
+    let row = best;
+    for (let d = 0; d < 6 && row; d++) {
+      const t = textOf(row);
+      if (
+        /\\d+\\s+lineups/i.test(t) &&
+        t.length <= 220 &&
+        (matchesComp(t) || rowHasCompetition(best))
+      ) {
+        break;
+      }
+      row = row.parentElement;
+    }
+    const scope = row || best;
+    const buttons = scope.querySelectorAll
+      ? [...scope.querySelectorAll("button, [role='button']")]
+      : [];
+    const chevron =
+      buttons.reverse().find((b) => {
+        const bt = textOf(b);
+        return bt.length < 8 || /svg|chevron|arrow/i.test(b.innerHTML || "");
+      }) || null;
     const clickable =
+      chevron ||
       (best.closest && best.closest("button, [role='button'], [data-accordion-control]")) ||
+      scope ||
       best;
     if (typeof clickable.click === "function") clickable.click();
   }
@@ -595,13 +683,14 @@ function escapeRegExpLiteral(value: string): string {
 /**
  * Accordion title matcher: "Bundesliga" must not hit "Bundesliga 2" / "2. Bundesliga",
  * and "Liga" must not hit "Liga 2". Numbered titles like "2. Bundesliga" still match themselves.
+ * LINEUPS counts ("Serie A 20 LINEUPS") must NOT be treated as division suffixes.
  */
 export function competitionAccordionRegex(competition: string): RegExp {
   const needle = competition.trim();
   if (needle.length < 2) return /(?!)/; // never matches
   const escaped = escapeRegExpLiteral(needle);
-  // Reject division suffixes (… 2 / … II) and mid-token continuation.
-  const after = `(?![\\p{L}\\p{N}.]|\\s*(?:\\d+|II|III)\\b)`;
+  // Reject single-digit division suffixes (… 2 / … II), not multi-digit "20 LINEUPS".
+  const after = `(?![\\p{L}\\p{N}.]|\\s*(?:II|III)\\b|\\s*[2-9]\\b)`;
   if (/^\d/.test(needle)) {
     return new RegExp(`(?:^|[^\\p{L}\\p{N}])${escaped}${after}`, "iu");
   }
@@ -878,11 +967,11 @@ export function parseSorareInsideGamesPayload(payload: unknown): {
 }
 
 const SECTION_HEADER_RE =
-  /^(starting(?:\s*xi)?|bench(?:\s*players)?|dnp(?:\s*players)?|out|reliability|high|medium|low|key|comments|updates|conversation|team analysis|injuries|potential factors|starting\s*%\s*key)\b/i;
+  /^(starting(?:\s*xi)?|bench(?:\s*players)?|dnp(?:\s*players)?|out|reliability|high|medium|low|key|comments|updates|conversation|team analysis|injuries(?:\s*&\s*recovery(?:\s*status)?)?|suspensions(?:\s*&\s*ineligibilities)?|potential factors|starting\s*%\s*key)\b/i;
 const PITCH_STATS_RE = /^\d{1,3}\s*all$/i;
 const BADGE_PCT_RE = /^(\d{1,3})\s*%(?:\s+\d{1,3}\s*all)?$/i;
 const PITCH_CHROME_RE =
-  /^(score|aa|da|app|pspe|high|medium|low)$/i;
+  /^(score|aa|da|app|pspe|ps|high|medium|low)$/i;
 
 function isPitchChrome(name: string): boolean {
   const t = name.trim();
@@ -890,6 +979,7 @@ function isPitchChrome(name: string): boolean {
   if (/^%\s*\+?\s*ps$/i.test(t)) return true;
   if (/sorareinside\.com/i.test(t)) return true;
   if (/^(first published|updated|copy lineup url)\b/i.test(t)) return true;
+  if (/^(ago|hours?|days?|minutes?)\b/i.test(t)) return true;
   return false;
 }
 
@@ -900,34 +990,140 @@ function looksLikePlayerName(name: string): boolean {
   if (isPitchChrome(t) || PITCH_STATS_RE.test(t)) return false;
   if (/^\d{1,3}\s*%$/.test(t)) return false;
   if (/^https?:/i.test(t)) return false;
+  // Pitch chrome / UI crumbs that slip into Bench/DNP text.
+  if (/^[%+\d\s.]+$/.test(t)) return false;
+  if (/^[A-Z]{1,4}$/.test(t)) return false;
+  if (/^(score|aa|da|app|pspe|all)$/i.test(t)) return false;
   // Prefer names with a letter (allow accents).
   return /[A-Za-zÀ-ÿ]/.test(t);
+}
+
+export type SorareInsideAnalystNotes = {
+  teamAnalysis?: string;
+  injuriesAndRecovery?: string;
+  suspensionsAndIneligibilities?: string;
+};
+
+/** Pull analyst text blocks from a SorareInside modal dump. */
+export function parseSorareInsideAnalystNotes(
+  text: string,
+): SorareInsideAnalystNotes {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  type Mode = keyof SorareInsideAnalystNotes | "none";
+  let mode: Mode = "none";
+  const buckets: Record<keyof SorareInsideAnalystNotes, string[]> = {
+    teamAnalysis: [],
+    injuriesAndRecovery: [],
+    suspensionsAndIneligibilities: [],
+  };
+
+  const stop =
+    /^(bench\s*players?|dnp\s*players?|comments|updates|conversation|starting\s*%\s*key|potential factors|what does it mean|set your username|expert|reliability)\b/i;
+
+  for (const line of lines) {
+    if (/^team\s*analysis$/i.test(line)) {
+      mode = "teamAnalysis";
+      continue;
+    }
+    if (/^injuries(?:\s*&\s*recovery(?:\s*status)?)?\.?$/i.test(line)) {
+      mode = "injuriesAndRecovery";
+      continue;
+    }
+    if (/^suspensions(?:\s*&\s*ineligibilities)?\.?$/i.test(line)) {
+      mode = "suspensionsAndIneligibilities";
+      continue;
+    }
+    if (stop.test(line) || isPitchChrome(line)) {
+      mode = "none";
+      continue;
+    }
+    if (mode === "none") continue;
+    if (/^(none|\.|—|-)$/i.test(line)) continue;
+    buckets[mode].push(line);
+  }
+
+  const out: SorareInsideAnalystNotes = {};
+  for (const key of Object.keys(buckets) as (keyof SorareInsideAnalystNotes)[]) {
+    const joined = buckets[key].join("\n").trim();
+    if (joined) out[key] = joined;
+  }
+  return out;
 }
 
 function isBarePlayerName(line: string): boolean {
   return looksLikePlayerName(line) && !/\d\s*%/.test(line);
 }
 
-/** Best-effort parse of visible player % labels inside a lineup modal. */
+/** Score how well a pitch parse looks like a real Starting XI (high % starters). */
+export function pitchStartingParseQuality(
+  players: SorareInsidePlayerProbability[],
+): number {
+  const starters = players.filter(
+    (p) => (p.group ?? "starting") === "starting" && p.percentage != null,
+  );
+  const high = starters.filter((p) => (p.percentage ?? 0) >= 50).length;
+  const veryHigh = starters.filter((p) => (p.percentage ?? 0) >= 70).length;
+  // Weight solid starters hard so a 2D text mis-pair (3× high + 6 alts) loses to
+  // a real 11 with badges when card extraction recovers them.
+  return veryHigh * 20 + high * 10 + starters.length;
+}
+
+/**
+ * Score a single formation-card text blob. Bare "90%" = yellow primary badge;
+ * same-line "Name 20%" alone is typically a grey alt leaf.
+ */
+export function scorePitchCardText(text: string): number {
+  const lines = String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const bareBadge = lines.some((line) => /^\d{1,3}\s*%$/.test(line));
+  const pctCount = (String(text).match(/\d{1,3}\s*%/g) || []).length;
+  return (bareBadge ? 100 : 0) + pctCount * 10 + Math.min(String(text).length, 100);
+}
+
+/** Prefer the parse that recovered more high-% starters (not grey alts only). */
+export function pickBestPitchProbabilityParse(
+  a: SorareInsidePlayerProbability[],
+  b: SorareInsidePlayerProbability[],
+): SorareInsidePlayerProbability[] {
+  if (!a.length) return b;
+  if (!b.length) return a;
+  return pitchStartingParseQuality(a) >= pitchStartingParseQuality(b) ? a : b;
+}
+
+/**
+ * Best-effort parse of visible player % labels inside a lineup modal.
+ * Badge+% name pairs are collected first so grey "Alt N%" lines do not win
+ * via first-seen dedupe when the DOM order lists the alt before the starter.
+ */
 export function parseProbabilitiesFromModalText(text: string): SorareInsidePlayerProbability[] {
   const lines = text
     .split(/\r?\n/)
     .map((line) => line.replace(/\s+/g, " ").trim())
     .filter(Boolean);
-  const out: SorareInsidePlayerProbability[] = [];
-  const seen = new Set<string>();
-  const push = (
+  type Hit = {
+    name: string;
+    percentage: number;
+    rawLabel: string;
+    fromBadge: boolean;
+  };
+  const hits: Hit[] = [];
+  const pushHit = (
     name: string,
     percentage: number,
     rawLabel: string,
-    group: SorareInsidePlayerGroup = "starting",
+    fromBadge: boolean,
   ) => {
-    if (!name || !Number.isFinite(percentage) || percentage < 0 || percentage > 100) return;
+    if (!name || !Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
+      return;
+    }
     if (!looksLikePlayerName(name)) return;
-    const key = name.toLowerCase();
-    if (seen.has(key)) return;
-    seen.add(key);
-    out.push({ name, percentage, rawLabel, group });
+    hits.push({ name, percentage, rawLabel, fromBadge });
   };
 
   for (let i = 0; i < lines.length; i++) {
@@ -937,7 +1133,7 @@ export function parseProbabilitiesFromModalText(text: string): SorareInsidePlaye
       /^(.{2,60}?)\s+(\d{1,3})\s*%(?:\s*(?:chance of starting|start(?:ing)?)?)?$/i,
     );
     if (sameLine) {
-      push(sameLine[1].trim(), Number(sameLine[2]), line);
+      pushHit(sameLine[1].trim(), Number(sameLine[2]), line, false);
       continue;
     }
     // Badge % may sit above the photo (next line is the starter) or after the name.
@@ -956,12 +1152,44 @@ export function parseProbabilitiesFromModalText(text: string): SorareInsidePlaye
     const next = lines[j] ?? "";
     const nextIsName = isBarePlayerName(next);
     if (prevIsName) {
-      push(prev, pct, `${prev} ${pct}%`);
+      pushHit(prev, pct, `${prev} ${pct}%`, true);
     } else if (nextIsName) {
-      push(next, pct, `${next} ${pct}%`);
+      pushHit(next, pct, `${next} ${pct}%`, true);
     }
   }
-  return out;
+
+  const byName = new Map<string, Hit>();
+  for (const hit of hits) {
+    const key = hit.name.toLowerCase();
+    const prev = byName.get(key);
+    if (!prev) {
+      byName.set(key, hit);
+      continue;
+    }
+    // Prefer badge-linked rows, then the higher percentage.
+    if (hit.fromBadge && !prev.fromBadge) {
+      byName.set(key, hit);
+      continue;
+    }
+    if (hit.fromBadge === prev.fromBadge && hit.percentage > prev.percentage) {
+      byName.set(key, hit);
+    }
+  }
+
+  const uniq = [...byName.values()];
+  const badgeNames = new Set(
+    uniq.filter((h) => h.fromBadge).map((h) => h.name.toLowerCase()),
+  );
+  // When badge starters exist, same-line rows are grey alts → bench.
+  const hasBadgeStarters = badgeNames.size > 0;
+  return uniq.map((h) => ({
+    name: h.name,
+    percentage: h.percentage,
+    rawLabel: h.rawLabel,
+    group: (hasBadgeStarters && !h.fromBadge
+      ? "bench"
+      : "starting") as SorareInsidePlayerGroup,
+  }));
 }
 
 /**
@@ -994,6 +1222,11 @@ function parseOnePitchCard(text: string): SorareInsidePlayerProbability[] {
   let outBadge = false;
   let starter: string | null = null;
   let pendingName: string | null = null;
+  let pendingSameLine: {
+    name: string;
+    percentage: number;
+    rawLabel: string;
+  } | null = null;
   const pushOut = (name: string) => {
     out.push({
       name,
@@ -1002,12 +1235,23 @@ function parseOnePitchCard(text: string): SorareInsidePlayerProbability[] {
       group: "out",
     });
   };
+  const flushPendingSameLine = () => {
+    if (!pendingSameLine) return;
+    out.push({
+      name: pendingSameLine.name,
+      percentage: pendingSameLine.percentage,
+      rawLabel: pendingSameLine.rawLabel,
+      // Alone on the card → starter; otherwise grey alt under the badge starter.
+      group: starter ? "bench" : "starting",
+    });
+    pendingSameLine = null;
+  };
   for (const line of lines) {
     if (/^(out|dnp)$/i.test(line)) {
-      const name = starter ?? pendingName;
-      if (name && !starter) {
-        starter = name;
-        pushOut(name);
+      const outName: string | null = starter ?? pendingName;
+      if (outName && !starter) {
+        starter = outName;
+        pushOut(outName);
       }
       outBadge = true;
       pendingName = null;
@@ -1032,12 +1276,22 @@ function parseOnePitchCard(text: string): SorareInsidePlayerProbability[] {
     if (sameLine) {
       const name = sameLine[1]!.trim();
       if (!looksLikePlayerName(name)) continue;
-      out.push({
-        name,
-        percentage: Number(sameLine[2]),
-        rawLabel: line,
-        group: starter ? "bench" : "starting",
-      });
+      if (starter) {
+        out.push({
+          name,
+          percentage: Number(sameLine[2]),
+          rawLabel: line,
+          group: "bench",
+        });
+      } else {
+        // May be a lone "Marcos Rojo 75%" card, or a grey alt listed before the
+        // badge/starter — defer until the card is fully scanned.
+        pendingSameLine = {
+          name,
+          percentage: Number(sameLine[2]),
+          rawLabel: line,
+        };
+      }
       continue;
     }
     if (!isBarePlayerName(line)) continue;
@@ -1059,6 +1313,7 @@ function parseOnePitchCard(text: string): SorareInsidePlayerProbability[] {
       group: "starting",
     });
   }
+  flushPendingSameLine();
   return out;
 }
 
@@ -1096,9 +1351,10 @@ export function parseBenchAndDnpPlayerLists(text: string): SorareInsidePlayerPro
       continue;
     }
     if (
-      /^(comments|updates|conversation|starting\s*%\s*key|team analysis|injuries)/i.test(
+      /^(comments|updates|conversation|starting\s*%\s*key|team analysis|injuries|suspensions)/i.test(
         line,
-      )
+      ) ||
+      isPitchChrome(line)
     ) {
       mode = "none";
       continue;

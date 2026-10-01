@@ -44,7 +44,7 @@ export const AF_LEAGUES: Record<number, AfLeagueDef> = {
     slug: "league-one",
     name: "League One",
     tmCompetition: "GB3",
-    mantraTournamentId: null,
+    mantraTournamentId: 26,
   },
   78: {
     id: 78,
@@ -103,6 +103,27 @@ export const AF_LEAGUES: Record<number, AfLeagueDef> = {
     tmCompetition: "BE1",
     mantraTournamentId: 13,
   },
+  333: {
+    id: 333,
+    slug: "upl",
+    name: "UPL",
+    tmCompetition: "UKR1",
+    mantraTournamentId: 15,
+  },
+  253: {
+    id: 253,
+    slug: "mls",
+    name: "MLS",
+    tmCompetition: "MLS1",
+    mantraTournamentId: 16,
+  },
+  71: {
+    id: 71,
+    slug: "brasileirao",
+    name: "Brasileirão",
+    tmCompetition: "BRA1",
+    mantraTournamentId: 19,
+  },
 };
 
 /** Leagues added in the multi-league expansion (exclude original PL1/GB1 if needed). */
@@ -123,6 +144,11 @@ export const UI_LEAGUE_SLUGS = [
 
 export type UiLeagueSlug = (typeof UI_LEAGUE_SLUGS)[number];
 
+/** Extra championships on Premium only (not header UI, not Live poller). */
+export const PREMIUM_EXTRA_SLUGS = ["league-one"] as const;
+
+export type PremiumLeagueSlug = UiLeagueSlug | (typeof PREMIUM_EXTRA_SLUGS)[number];
+
 export function allLeagueIds(): number[] {
   return Object.keys(AF_LEAGUES).map(Number);
 }
@@ -136,10 +162,29 @@ export function isUiLeagueSlug(slug: string): boolean {
   return (UI_LEAGUE_SLUGS as readonly string[]).includes(slug);
 }
 
+export function isPremiumLeagueSlug(slug: string): boolean {
+  return (
+    isUiLeagueSlug(slug) || (PREMIUM_EXTRA_SLUGS as readonly string[]).includes(slug)
+  );
+}
+
 export function uiLeagues(): AfLeagueDef[] {
   return UI_LEAGUE_SLUGS.map((slug) => leagueBySlug(slug)).filter(
     (league): league is AfLeagueDef => league != null,
   );
+}
+
+export function premiumLeagues(): AfLeagueDef[] {
+  return [
+    ...uiLeagues(),
+    ...PREMIUM_EXTRA_SLUGS.map((slug) => leagueBySlug(slug)).filter(
+      (league): league is AfLeagueDef => league != null,
+    ),
+  ];
+}
+
+export function premiumMantraTournaments(): number[] {
+  return uniqueMantraTournaments(premiumLeagues().map((league) => league.id));
 }
 
 export function isUiTmCompetition(code: string): boolean {

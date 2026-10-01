@@ -5,6 +5,7 @@ import {
   configuredMantraAuctionIds,
   makeMantraAuctionBatches,
   mantraAuctionDetailKey,
+  parseMantraAuctionCollectorArgs,
   retryCheckpointFailures,
   VERIFIED_MANTRA_AUCTION_IDS,
 } from "./runMantraAuctions.js";
@@ -147,6 +148,25 @@ test("targeted retries request checkpoint failures once and become idempotent", 
   assert.equal(uploads, 1);
   assert.deepEqual(checkpoint.importedPlayerKeys, ["653:2714:233515"]);
   assert.deepEqual(checkpoint.failedPlayerDetails, []);
+});
+
+test("collector --scope=ekstraklasa rediscovers Poland only", () => {
+  const parsed = parseMantraAuctionCollectorArgs(["--scope=ekstraklasa"]);
+  assert.equal(parsed.retryFailed, false);
+  assert.equal(parsed.forceDiscover, true);
+  assert.deepEqual(
+    parsed.requestedScopes.map((scope) => scope.key),
+    ["ekstraklasa"],
+  );
+  const reconcile = parseMantraAuctionCollectorArgs(["--reconcile"]);
+  assert.deepEqual(
+    reconcile.requestedScopes.map((scope) => scope.key),
+    ["championship", "ekstraklasa"],
+  );
+  assert.throws(
+    () => parseMantraAuctionCollectorArgs(["--scope=serie-a"]),
+    /Unknown auction scope/,
+  );
 });
 
 test("collector treats Bundesliga as a first-class auction scope", async () => {

@@ -58,7 +58,7 @@ test("Live league dropdown uses header Latin names and slug option values", asyn
   const bind = app.slice(app.indexOf("function bindLivePage"), app.indexOf("export async function start"));
   assert.match(bind, /fetchLiveRound\(\{ silent: false \}\)/);
   assert.match(bind, /resolveCompetitionIdFromLeagueParam/);
-  assert.match(boot, /pages\/live\.js\?v=12/);
+  assert.match(boot, /pages\/live\.js\?v=14/);
 });
 
 test("Live heading and round tabs use human names, not slugs or English Round N", async () => {

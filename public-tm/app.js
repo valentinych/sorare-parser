@@ -158,6 +158,44 @@ let XI_LEAGUES = [
   },
 ];
 
+/** Same Latin names as `/tables`, plus League One. */
+const BUILDER_SELECT_LABELS = {
+  ekstraklasa: "Ekstraklasa",
+  "serie-a": "Serie A",
+  bundesliga: "Bundesliga",
+  "premier-league": "Premier League",
+  championship: "Championship",
+  "league-one": "League One",
+  "super-lig": "Süper Lig",
+  "ligue-1": "Ligue 1",
+  "la-liga": "La Liga",
+  eredivisie: "Eredivisie",
+  "jupiler-pro-league": "Pro League",
+  "primeira-liga": "Primeira Liga",
+  upl: "UPL",
+  mls: "MLS",
+  brasileirao: "Brasileirão",
+};
+const BUILDER_SELECT_FALLBACK = [
+  { slug: "ekstraklasa", name: "Ekstraklasa", tmCompetition: "PL1", mantraTournamentId: 18, afLeagueId: 106 },
+  { slug: "serie-a", name: "Serie A", tmCompetition: "IT1", mantraTournamentId: 1, afLeagueId: 135 },
+  { slug: "bundesliga", name: "Bundesliga", tmCompetition: "L1", mantraTournamentId: 3, afLeagueId: 78 },
+  { slug: "premier-league", name: "Premier League", tmCompetition: "GB1", mantraTournamentId: 2, afLeagueId: 39 },
+  { slug: "championship", name: "Championship", tmCompetition: "GB2", mantraTournamentId: 11, afLeagueId: 40 },
+  { slug: "super-lig", name: "Süper Lig", tmCompetition: "TR1", mantraTournamentId: 21, afLeagueId: 203 },
+  { slug: "ligue-1", name: "Ligue 1", tmCompetition: "FR1", mantraTournamentId: 4, afLeagueId: 61 },
+  { slug: "la-liga", name: "La Liga", tmCompetition: "ES1", mantraTournamentId: 5, afLeagueId: 140 },
+  { slug: "eredivisie", name: "Eredivisie", tmCompetition: "NL1", mantraTournamentId: 12, afLeagueId: 88 },
+  { slug: "jupiler-pro-league", name: "Pro League", tmCompetition: "BE1", mantraTournamentId: 13, afLeagueId: 144 },
+  { slug: "primeira-liga", name: "Primeira Liga", tmCompetition: "PO1", mantraTournamentId: 14, afLeagueId: 94 },
+  { slug: "upl", name: "UPL", tmCompetition: "UKR1", mantraTournamentId: 15, afLeagueId: 333 },
+  { slug: "mls", name: "MLS", tmCompetition: "MLS1", mantraTournamentId: 16, afLeagueId: 253 },
+  { slug: "brasileirao", name: "Brasileirão", tmCompetition: "BRA1", mantraTournamentId: 19, afLeagueId: 71 },
+  { slug: "league-one", name: "League One", tmCompetition: "GB3", mantraTournamentId: 26, afLeagueId: 41 },
+];
+/** @type {{ slug: string, name: string, tmCompetition: string, mantraTournamentId: number, afLeagueId: number }[]} */
+let builderLeaguesCatalog = BUILDER_SELECT_FALLBACK.slice();
+
 async function loadXiLeaguesFromApi() {
   try {
     const res = await fetch("/af/leagues");
@@ -175,6 +213,25 @@ async function loadXiLeaguesFromApi() {
       afLeagueId: l.afLeagueId || l.id,
       tmCompetition: l.tmCompetition,
       mantraTournamentId: l.mantraTournamentId ?? null,
+    }));
+  } catch {
+    /* keep fallback */
+  }
+}
+
+async function loadBuilderLeaguesFromApi() {
+  try {
+    const res = await fetch("/builder/leagues");
+    if (!res.ok) return;
+    const data = await res.json();
+    const list = data.leagues || [];
+    if (!list.length) return;
+    builderLeaguesCatalog = list.map((l) => ({
+      slug: l.slug,
+      name: BUILDER_SELECT_LABELS[l.slug] || l.name,
+      tmCompetition: l.tmCompetition,
+      mantraTournamentId: l.mantraTournamentId,
+      afLeagueId: l.afId,
     }));
   } catch {
     /* keep fallback */
@@ -276,6 +333,22 @@ function currentXiLeague() {
   const tmId = activeCompetitionId;
   const fromAf = XI_LEAGUES.find((l) => l.tmCompetition === tmId);
   if (fromAf) return fromAf;
+  const fromBuilder =
+    builderLeaguesCatalog.find((l) => l.tmCompetition === tmId) ||
+    BUILDER_SELECT_FALLBACK.find((l) => l.tmCompetition === tmId);
+  if (fromBuilder) {
+    return {
+      id: fromBuilder.slug,
+      name: fromBuilder.name,
+      source: "af",
+      path: fromBuilder.slug,
+      seasons: [2026],
+      defaultSeason: 2026,
+      tmCompetition: fromBuilder.tmCompetition,
+      afLeagueId: fromBuilder.afLeagueId,
+      mantraTournamentId: fromBuilder.mantraTournamentId,
+    };
+  }
   // Fallback: TM-only competition not in AF registry
   const comp = competitions.find((c) => c.id === tmId);
   return {
@@ -959,28 +1032,74 @@ function builderSurname(player) {
   return String(player?.name || "?");
 }
 
+const MANTRA_IMAGE_ORIGIN = "https://mantrafootball.s3.eu-west-1.amazonaws.com";
+const MANTRA_IMAGE_PATHS = [
+  "/player_avatars/",
+  "/club_logo/",
+  "/teams/",
+  "/user_logos/",
+];
+
+function builderPublicImage(src) {
+  if (!src || typeof src !== "string") return null;
+  const trimmed = src.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("/mantra/image")) return trimmed;
+  try {
+    const url = new URL(trimmed, `${MANTRA_IMAGE_ORIGIN}/`);
+    if (
+      url.protocol !== "https:" ||
+      url.hostname !== "mantrafootball.s3.eu-west-1.amazonaws.com" ||
+      url.port ||
+      url.username ||
+      url.password ||
+      !MANTRA_IMAGE_PATHS.some((prefix) => url.pathname.startsWith(prefix))
+    ) {
+      return null;
+    }
+    return `/mantra/image?url=${encodeURIComponent(url.href)}`;
+  } catch {
+    return null;
+  }
+}
+
 function builderAvatarMarkup(player, imageClass) {
   const name = player.fullName || player.name || "?";
   const fallback = `<span class="builder-slot-initials">${esc(builderInitials(name))}</span>`;
-  const portrait = player.avatarPath
-    ? `${fallback}<img class="${imageClass}" src="${esc(player.avatarPath)}" alt="" loading="lazy" onerror="this.hidden=true" />`
+  const photoSrc = builderPublicImage(player.avatarPath);
+  const portrait = photoSrc
+    ? `${fallback}<img class="${imageClass}" src="${esc(photoSrc)}" alt="" loading="lazy" onerror="this.hidden=true" />`
     : fallback;
-  const club = player.clubLogo
-    ? `<img class="builder-slot-club" src="${esc(player.clubLogo)}" alt="" loading="lazy" onerror="this.hidden=true" />`
+  const clubSrc = builderPublicImage(player.clubLogo) || player.clubLogo;
+  const club = clubSrc
+    ? `<img class="builder-slot-club" src="${esc(clubSrc)}" alt="" loading="lazy" onerror="this.hidden=true" />`
     : "";
   return `${portrait}${club}`;
 }
 
-async function apiJson(url, options) {
-  const res = await fetch(url, options);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const error = new Error(data.error || `HTTP ${res.status}`);
-    error.status = res.status;
-    error.code = data.code;
+async function apiJson(url, options, timeoutMs = 0) {
+  const ac = new AbortController();
+  const timer = timeoutMs > 0 ? setTimeout(() => ac.abort(), timeoutMs) : null;
+  try {
+    const res = await fetch(url, { ...options, signal: ac.signal });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const error = new Error(data.error || `HTTP ${res.status}`);
+      error.status = res.status;
+      error.code = data.code || data.error;
+      error.remainingMs = data.remainingMs;
+      error.lastRefreshedAt = data.lastRefreshedAt;
+      throw error;
+    }
+    return data;
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(timeoutMs ? `нет ответа за ${Math.round(timeoutMs / 1000)}с` : "отменено");
+    }
     throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
-  return data;
 }
 
 function fillAccountTimeZones(selectedTimeZone) {
@@ -1074,8 +1193,6 @@ function renderAccount() {
   );
   const mappingTab = document.querySelector(`.tab[data-view="mapping"]`);
   if (mappingTab) mappingTab.hidden = !expected11Admin;
-  const leagueOneTab = document.querySelector(`.tab[data-view="league-one"]`);
-  if (leagueOneTab) leagueOneTab.hidden = !expected11Admin;
   const premiumTab = document.querySelector(`.tab[data-view="premium"]`);
   if (premiumTab) premiumTab.hidden = !expected11Premium;
   const liveDraft = Boolean(
@@ -1114,6 +1231,8 @@ function renderAccount() {
   renderBuilderSaveControls();
   renderSorareAuthentication();
   renderSorareInsideConnection();
+  syncBuilderAuctionRefreshButton();
+  if (currentPageName() === "builder") loadBuilderAuctionCooldown();
 }
 
 async function loadAccount() {
@@ -1222,14 +1341,26 @@ async function loadBuilderMyTeams() {
   builderMyTeamsKey = key;
 }
 
+function builderSelectCompetitions() {
+  const catalog = builderLeaguesCatalog.length ? builderLeaguesCatalog : BUILDER_SELECT_FALLBACK;
+  const byId = new Map((competitions || []).map((c) => [c.id, c]));
+  return catalog.map((l) => {
+    const c = byId.get(l.tmCompetition);
+    return {
+      ...(c || { id: l.tmCompetition, name: l.name }),
+      id: l.tmCompetition,
+      name: BUILDER_SELECT_LABELS[l.slug] || l.name,
+      builderSlug: l.slug,
+    };
+  });
+}
+
 function fillBuilderCompetitionSelect() {
   const sel = document.getElementById("builder-competition");
   if (!sel) return;
-  sel.innerHTML = competitions
-    .map((c) => {
-      const season = c.seasonId ? ` · ${c.seasonId}` : "";
-      return `<option value="${esc(c.id)}">${esc(c.name)}${season}</option>`;
-    })
+  const options = builderSelectCompetitions();
+  sel.innerHTML = options
+    .map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`)
     .join("");
   if ([...sel.options].some((o) => o.value === activeCompetitionId)) {
     sel.value = activeCompetitionId;
@@ -1289,6 +1420,132 @@ function fillBuilderTeamSelect() {
   return sel.value ? Number(sel.value) : null;
 }
 
+const BUILDER_REFRESH_AUCTIONS_LABEL = "Обновить после раундов аукциона";
+let builderAuctionCooldown = {
+  leagueId: null,
+  lastRefreshedAt: null,
+  remainingMs: 0,
+  fetchedAt: 0,
+};
+let builderAuctionCooldownTimer = null;
+
+function isBuilderAdmin() {
+  return Boolean(accountState.authenticated && accountState.entitlements?.expected11Admin);
+}
+
+function selectedBuilderLeagueId() {
+  const n = Number(document.getElementById("builder-league")?.value);
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
+}
+
+function builderCooldownRemainingMs() {
+  if (!builderAuctionCooldown.remainingMs) return 0;
+  return Math.max(0, builderAuctionCooldown.remainingMs - (Date.now() - builderAuctionCooldown.fetchedAt));
+}
+
+function builderCooldownLabel(remainingMs) {
+  return `Доступно через ${Math.max(1, Math.ceil(remainingMs / 60000))} мин`;
+}
+
+function applyBuilderAuctionCooldown(leagueId, remainingMs, lastRefreshedAt) {
+  builderAuctionCooldown = {
+    leagueId,
+    lastRefreshedAt: lastRefreshedAt || null,
+    remainingMs: Number(remainingMs) || 0,
+    fetchedAt: Date.now(),
+  };
+  if (builderAuctionCooldownTimer) {
+    clearInterval(builderAuctionCooldownTimer);
+    builderAuctionCooldownTimer = null;
+  }
+  if (builderAuctionCooldown.remainingMs > 0) {
+    builderAuctionCooldownTimer = setInterval(() => {
+      if (builderCooldownRemainingMs() <= 0) {
+        clearInterval(builderAuctionCooldownTimer);
+        builderAuctionCooldownTimer = null;
+      }
+      syncBuilderAuctionRefreshButton();
+    }, 15000);
+  }
+  syncBuilderAuctionRefreshButton();
+}
+
+function syncBuilderAuctionRefreshButton() {
+  const button = document.getElementById("builder-refresh-auctions");
+  if (!button) return;
+  const admin = isBuilderAdmin();
+  button.hidden = !admin;
+  if (!admin) return;
+  if (button.getAttribute("aria-busy") === "true") return;
+  const leagueId = selectedBuilderLeagueId();
+  const remaining =
+    leagueId != null && builderAuctionCooldown.leagueId === leagueId
+      ? builderCooldownRemainingMs()
+      : 0;
+  button.disabled = leagueId == null || remaining > 0;
+  button.textContent = remaining > 0 ? builderCooldownLabel(remaining) : BUILDER_REFRESH_AUCTIONS_LABEL;
+}
+
+async function loadBuilderAuctionCooldown() {
+  const leagueId = selectedBuilderLeagueId();
+  if (!isBuilderAdmin() || leagueId == null) {
+    applyBuilderAuctionCooldown(leagueId, 0, null);
+    return;
+  }
+  try {
+    const data = await apiJson(
+      `/api/expected11/premium/refresh-auctions?leagueId=${encodeURIComponent(leagueId)}`,
+    );
+    applyBuilderAuctionCooldown(leagueId, data.remainingMs, data.lastRefreshedAt);
+  } catch {
+    if (builderAuctionCooldown.leagueId !== leagueId) applyBuilderAuctionCooldown(leagueId, 0, null);
+    else syncBuilderAuctionRefreshButton();
+  }
+}
+
+async function refreshBuilderAuctions() {
+  const button = document.getElementById("builder-refresh-auctions");
+  const meta = document.getElementById("builder-meta");
+  const leagueId = selectedBuilderLeagueId();
+  if (!isBuilderAdmin() || leagueId == null) return;
+  if (button) {
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    button.textContent = BUILDER_REFRESH_AUCTIONS_LABEL;
+  }
+  if (meta) meta.textContent = "Обновляю аукцион выбранной лиги…";
+  try {
+    const data = await apiJson(
+      "/api/expected11/premium/refresh-auctions",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ leagueId }),
+      },
+      300000,
+    );
+    applyBuilderAuctionCooldown(
+      leagueId,
+      data.remainingMs || 30 * 60 * 1000,
+      data.lastRefreshedAt,
+    );
+    const warning = data.auctions?.warning ? ` · ${data.auctions.warning}` : "";
+    if (meta) {
+      meta.textContent = `Лига ${data.league}: составы ${data.teams}, аукционы ${data.auctions?.imported ?? 0}/${data.auctions?.discovered ?? 0}${warning}`;
+    }
+  } catch (error) {
+    if (error.status === 429 || error.code === "auction_refresh_cooldown") {
+      applyBuilderAuctionCooldown(leagueId, error.remainingMs, error.lastRefreshedAt);
+      if (meta) meta.textContent = builderCooldownLabel(builderCooldownRemainingMs() || error.remainingMs || 1);
+      return;
+    }
+    if (meta) meta.textContent = `Ошибка: ${error.message}`;
+  } finally {
+    if (button) button.removeAttribute("aria-busy");
+    syncBuilderAuctionRefreshButton();
+  }
+}
+
 async function ensureBuilderLoaded() {
   fillBuilderCompetitionSelect();
   syncBuilderHash();
@@ -1332,6 +1589,7 @@ async function ensureBuilderLoaded() {
           ? "Выбери лигу Mantra"
           : "Для турнира нет Mantra-команд";
   }
+  loadBuilderAuctionCooldown();
 }
 
 async function loadBuilderTeam(teamId) {
@@ -1614,15 +1872,7 @@ function loadBuilderExportImage(src) {
 }
 
 function builderExportImageSrc(src) {
-  try {
-    const url = new URL(src, location.origin);
-    if (url.hostname === "mantrafootball.s3.eu-west-1.amazonaws.com") {
-      return `/mantra/image?url=${encodeURIComponent(url.href)}`;
-    }
-  } catch {
-    return src;
-  }
-  return src;
+  return builderPublicImage(src) || src;
 }
 
 function drawBuilderExportCover(ctx, image, x, y, width, height) {
@@ -3345,6 +3595,10 @@ function competitionLeagueSlug(compId = activeCompetitionId) {
   const xi = XI_LEAGUES.find((l) => l.tmCompetition === compId);
   if (xi?.path) return String(xi.path);
   if (xi?.id) return String(xi.id);
+  const builder =
+    builderLeaguesCatalog.find((l) => l.tmCompetition === compId) ||
+    BUILDER_SELECT_FALLBACK.find((l) => l.tmCompetition === compId);
+  if (builder?.slug) return builder.slug;
   const c = competitions.find((x) => x.id === compId);
   if (c?.name) {
     const s = slugifyLeagueName(c.name);
@@ -3360,7 +3614,7 @@ function resolveCompetitionIdFromLeagueParam(param) {
   const rawLower = raw.toLowerCase();
   const slug = slugifyLeagueName(raw);
   const compact = slug.replace(/-/g, "");
-  const catalog = [...competitions, ...competitionResolve, ...XI_LEAGUES];
+  const catalog = [...competitions, ...competitionResolve, ...XI_LEAGUES, ...builderLeaguesCatalog];
   const byId = catalog.find((c) => {
     const id = String(c.id || "");
     const path = String(c.path || c.slug || "");
@@ -3435,9 +3689,6 @@ function setView(name) {
     return;
   }
   if (name === "mapping" && !accountState.entitlements?.expected11Admin) {
-    name = "clubs";
-  }
-  if (name === "league-one" && !accountState.entitlements?.expected11Admin) {
     name = "clubs";
   }
   if (name === "premium" && !accountState.entitlements?.expected11Premium) {
@@ -4929,7 +5180,8 @@ async function openGame(gameId) {
 function fillCompetitionSelect(viewName = currentPageName()) {
   const sel = document.getElementById("competition-select");
   if (!sel) return;
-  let options = competitions.slice();
+  const builderMode = viewName === "builder";
+  let options = builderMode ? builderSelectCompetitions() : competitions.slice();
   if (!options.length) {
     sel.innerHTML = `<option value="${activeCompetitionId}">${activeCompetitionId}</option>`;
     return;
@@ -4938,8 +5190,9 @@ function fillCompetitionSelect(viewName = currentPageName()) {
     const fromParam = new URLSearchParams(location.search).get("league");
     const extra =
       competitionResolve.find((c) => c.id === activeCompetitionId) ||
-      XI_LEAGUES.find((l) => l.tmCompetition === activeCompetitionId);
-    if (fromParam && extra) {
+      XI_LEAGUES.find((l) => l.tmCompetition === activeCompetitionId) ||
+      builderLeaguesCatalog.find((l) => l.tmCompetition === activeCompetitionId);
+    if ((fromParam || builderMode) && extra) {
       options = options.concat([
         {
           id: extra.tmCompetition || extra.id,
@@ -4953,8 +5206,8 @@ function fillCompetitionSelect(viewName = currentPageName()) {
   }
   sel.innerHTML = options
     .map((c) => {
-      const pending = c.pending ? " · sync…" : "";
-      const season = c.seasonId ? ` · ${c.seasonId}` : "";
+      const pending = !builderMode && c.pending ? " · sync…" : "";
+      const season = !builderMode && c.seasonId ? ` · ${c.seasonId}` : "";
       return `<option value="${c.id}">${c.name}${season}${pending}</option>`;
     })
     .join("");
@@ -5014,7 +5267,11 @@ export async function start(page = currentPageName()) {
       renderBuilderSaveControls();
     };
     pageHooks.onAccountChanged();
-    await Promise.all([loadXiLeaguesFromApi(), loadAccount()]);
+    await Promise.all([
+      loadXiLeaguesFromApi(),
+      page === "builder" ? loadBuilderLeaguesFromApi() : Promise.resolve(),
+      loadAccount(),
+    ]);
     const [compsRes, refRes] = await Promise.all([
       fetch("/api/competitions"),
       page === "ref" ? fetch("/api/ref") : Promise.resolve({ ok: false, json: async () => ({ categories: [] }) }),
@@ -5037,9 +5294,15 @@ export async function start(page = currentPageName()) {
     fillCompetitionSelect(page);
     if (page === "ref") {
       await renderRef();
+    } else if (page === "builder") {
+      if (statusEl) {
+        statusEl.hidden = true;
+        statusEl.textContent = "";
+      }
+      setView("builder");
     } else {
       await loadCompetitionData(activeCompetitionId);
-      if (page === "xi" || page === "builder" || page === "players" || page === "matches") {
+      if (page === "xi" || page === "players" || page === "matches") {
         setView(page);
       }
     }
@@ -5062,6 +5325,18 @@ document.getElementById("ref-category")?.addEventListener("change", renderRef);
 document.getElementById("ref-q")?.addEventListener("input", renderRef);
 document.getElementById("competition-select")?.addEventListener("change", (e) => {
   const nextId = e.target.value;
+  if (currentPageName() === "builder") {
+    activeCompetitionId = nextId;
+    localStorage.setItem("tmCompetition", nextId);
+    fillBuilderCompetitionSelect();
+    resetBuilderState({ catalog: true });
+    syncBuilderHash();
+    ensureBuilderLoaded().catch((err) => {
+      const meta = document.getElementById("builder-meta");
+      if (meta) meta.textContent = `Ошибка: ${err.message}`;
+    });
+    return;
+  }
   loadCompetitionData(nextId)
     .then(() => {
       fillXiSeasonSelect();
@@ -5073,11 +5348,6 @@ document.getElementById("competition-select")?.addEventListener("change", (e) =>
         xiLoadedKey = "";
         syncXiHash();
         return ensureXiLoaded();
-      }
-      if (currentPageName() === "builder") {
-        resetBuilderState({ catalog: true });
-        syncBuilderHash();
-        return ensureBuilderLoaded();
       }
     })
     .catch((err) => {
@@ -5254,8 +5524,15 @@ document.getElementById("builder-my-teams")?.addEventListener("change", async (e
     document.getElementById("builder-meta").textContent = `Ошибка: ${error.message}`;
   }
 });
+document.getElementById("builder-refresh-auctions")?.addEventListener("click", () => {
+  refreshBuilderAuctions().catch((error) => {
+    const meta = document.getElementById("builder-meta");
+    if (meta) meta.textContent = `Ошибка: ${error.message}`;
+  });
+});
 document.getElementById("builder-league")?.addEventListener("change", () => {
   resetBuilderState();
+  loadBuilderAuctionCooldown();
   const teamId = fillBuilderTeamSelect();
   if (teamId != null) {
     loadBuilderTeam(teamId).catch((err) => {

@@ -4,6 +4,7 @@ import Database from "better-sqlite3";
 import {
   getComputed,
   invalidateComputed,
+  listComputedKeys,
   peekComputed,
   peekComputedPersisted,
   resetComputedCacheForTests,
@@ -293,4 +294,16 @@ test("enqueue disabled still allows blocking compute worker writes", () => {
   assert.equal(computes, 1);
   assert.equal(queued.length, 0);
   assert.deepEqual(peekComputed("dream-team:ekstraklasa:4"), { xi: [1] });
+});
+
+test("listComputedKeys returns memory and sqlite keys for a prefix", () => {
+  const db = database();
+  writeComputed("mantra-ideal-table:v3:serie-a:B3", "v1", { n: 1 }, { database: db });
+  writeComputed("mantra-ideal-table:v4-pen:serie-a:C4", "v1", { n: 2 }, { database: db });
+  writeComputed("mantra-standings:v3:serie-a", "v1", { n: 3 }, { database: db });
+  const keys = listComputedKeys("mantra-ideal-table:", { database: db }).sort();
+  assert.deepEqual(keys, [
+    "mantra-ideal-table:v3:serie-a:B3",
+    "mantra-ideal-table:v4-pen:serie-a:C4",
+  ]);
 });

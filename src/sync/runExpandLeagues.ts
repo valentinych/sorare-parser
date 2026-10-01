@@ -4,7 +4,8 @@
  * Respects:
  *   - API Football via rateLimit4perSec in clients/apiFootball.ts
  *   - Transfermarkt via tmQueue (≤4/s, ≤100/min, jitter)
- *   - MantraFootball via rateLimit4perSec in clients/mantra.ts
+ *   - MantraFootball via rateLimit4perSec in clients/mantraRequest.ts
+ *   - FotMob via rateLimitFotmob (≤40 req/s) in clients/fotmob.ts
  *
  * Phases (sequential — never parallel across providers that share a budget):
  *   1. AF predict pipeline per league (teams/squads/preseason/stats/TM MV map)

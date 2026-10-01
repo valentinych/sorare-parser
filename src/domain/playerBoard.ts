@@ -2,6 +2,7 @@ import { config } from "../config.js";
 import { getDb } from "../db/index.js";
 import { leagueById } from "../lib/afLeagues.js";
 import { catalogMantraLeagues } from "../lib/mantraLeagueCatalog.js";
+import { catalogDivisionsForTournament } from "../lib/liveLeagues.js";
 import { namesMatch, normName } from "../lib/names.js";
 import { parseDetailRole, roleGroup, type Role } from "../lib/roles.js";
 import { loadAfNewTransferMap } from "./newTransfers.js";
@@ -347,7 +348,9 @@ export function listMantraLeagues(tournamentId?: number | null): MantraLeagueOpt
           )
           .all() as Array<{ id: number; name: string; division: string | null }>);
   if (!rows.length && tournamentId != null) {
-    rows = catalogMantraLeagues(tournamentId).map((r) => ({
+    const catalog = catalogDivisionsForTournament(tournamentId);
+    const fallback = catalog.length ? catalog : catalogMantraLeagues(tournamentId);
+    rows = fallback.map((r) => ({
       id: r.id,
       name: r.name,
       division: r.division,

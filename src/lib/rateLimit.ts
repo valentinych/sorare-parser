@@ -1,6 +1,8 @@
-/** Global Mantra-safe scheduler: serialized request starts with a 260ms gap. */
+/** MantraFootball: serialized starts, ≥260ms gap (≤4 req/s). Do not use for FotMob. */
 
 export const REQUEST_START_GAP_MS = 260;
+/** FotMob: 40 req/s → 25ms between starts. Never share with Mantra. */
+export const FOTMOB_REQUEST_START_GAP_MS = 25;
 
 export type SchedulerClock = {
   now: () => number;
@@ -36,4 +38,7 @@ export function createRequestStartScheduler(
   };
 }
 
-export const rateLimit4perSec = createRequestStartScheduler();
+/** MantraFootball only. */
+export const rateLimit4perSec = createRequestStartScheduler(REQUEST_START_GAP_MS);
+/** FotMob only (40 req/s). */
+export const rateLimitFotmob = createRequestStartScheduler(FOTMOB_REQUEST_START_GAP_MS);

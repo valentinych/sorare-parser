@@ -29,8 +29,7 @@ function authorizeAdmin(
 }
 
 export async function leagueOneRoutes(app: FastifyInstance) {
-  app.get("/api/league-one", async (request, reply) => {
-    if (!authorizeAdmin(request, reply)) return;
+  app.get("/api/league-one", async () => {
     const snapshot = await readLeagueOneSnapshot();
     return getLeagueOneView(snapshot);
   });
@@ -155,8 +154,7 @@ export async function leagueOneRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get("/api/league-one/reports", async (request, reply) => {
-    if (!authorizeAdmin(request, reply)) return;
+  app.get("/api/league-one/reports", async () => {
     return getLeagueOneReports();
   });
 

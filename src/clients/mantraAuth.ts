@@ -166,6 +166,11 @@ export async function mantraAuthedGet(path: string): Promise<string> {
   return res.text();
 }
 
+/** Signed-in HTML of `/managers/{id}` — same page as mantrafootball.org/managers/205. */
+export async function fetchMantraManagerHtml(userId: number): Promise<string> {
+  return mantraAuthedGet(`/managers/${userId}`);
+}
+
 async function mantraAuthedGetResponse(path: string, accept: string): Promise<Response> {
   await mantraLogin();
   const res = await mantraFetch(path, {
@@ -209,7 +214,10 @@ export type MantraMatchSquadPlayer = {
   playerId: number | null;
   name: string;
   positions: string[];
+  /** Posted GW total (base + bonuses). Preferred over `baseLabel`. */
   scoreLabel: string | null;
+  /** Mantra `team-player-score` (rating before bonuses). Used for DP. */
+  baseLabel?: string | null;
   nativePositions?: string[];
   clubName?: string | null;
 };
@@ -281,14 +289,19 @@ function parseSquadBlock(block: string): MantraMatchSquadPlayer[] {
     const positions = [...body.matchAll(/class="player-position[^"]*">\s*([^<]+)/g)]
       .map((x) => x[1]!.trim())
       .filter(Boolean);
-    const scoreM =
-      body.match(/team-player-score[^"]*">\s*([^<]+)/) ||
-      body.match(/team-player-score-unspecified">\s*([^<]+)/);
+    // Prefer total (base + bonuses). `team-player-score*` also matches the
+    // club-name chip `team-player-score-unspecified` ("Veres") — skip that.
+    const totalM = body.match(/class="team-player-total-score">\s*([^<]+)/);
+    const baseM = body.match(/class="team-player-score">\s*([^<]+)/);
+    const totalLabel = (totalM?.[1] ?? "").trim() || null;
+    const baseLabel = (baseM?.[1] ?? "").trim() || null;
+    const scoreLabel = totalLabel ?? baseLabel;
     out.push({
       playerId: idM ? Number(idM[1]) : null,
       name,
       positions,
-      scoreLabel: scoreM?.[1]?.trim() ?? null,
+      scoreLabel,
+      baseLabel,
     });
   }
   return out;

@@ -8,11 +8,13 @@ export const SPA_PAGES = [
   "matches",
   "live",
   "auctions",
+  "tables",
   "xi",
   "sorare",
   "mapping",
   "premium",
   "league-one",
+  "mantra-doma",
   "builder",
   "ref",
 ] as const;
@@ -25,11 +27,13 @@ const PAGE_PATHS: Record<SpaPage, string> = {
   matches: "/matches",
   live: "/live",
   auctions: "/auctions",
+  tables: "/tables",
   xi: "/xi",
   sorare: "/sorare",
   mapping: "/mapping",
   premium: "/premium",
   "league-one": "/league-one",
+  "mantra-doma": "/mantra-doma",
   builder: "/builder",
   ref: "/ref",
 };
@@ -51,11 +55,13 @@ const PAGE_TITLES: Record<SpaPage, string> = {
   matches: "Матчи",
   live: "Live",
   auctions: "Аукционы",
+  tables: "Таблицы",
   xi: "Предикты XI",
   sorare: "Фейк Мопс",
   mapping: "Mapping",
   premium: "Premium",
   "league-one": "League One",
+  "mantra-doma": "Mantra Дома",
   builder: "Squad Builder",
   ref: "Справочник",
 };
@@ -64,13 +70,15 @@ const DIALOGS_BY_PAGE: Record<SpaPage, string[]> = {
   clubs: ["account", "club", "game"],
   players: ["account", "club", "game"],
   matches: ["account", "club", "game"],
-  live: ["account", "live"],
+  live: ["account", "live", "ideal-vs-real"],
   auctions: ["account"],
+  tables: ["account", "ideal-vs-real"],
   xi: ["account"],
   sorare: ["account"],
   mapping: ["account"],
   premium: ["account"],
   "league-one": ["account"],
+  "mantra-doma": ["account"],
   builder: ["account"],
   ref: ["account"],
 };
@@ -119,11 +127,11 @@ export function composeSpaPage(html: string, page: SpaPage): string {
   );
   out = out.replace(
     /<script src="\/app\.js\?v=\d+" type="module"><\/script>/,
-    '<script src="/boot.js?v=27" type="module"></script>',
+    '<script src="/boot.js?v=77" type="module"></script>',
   );
   out = out.replace(
     /<script src="\/boot\.js\?v=\d+" type="module"><\/script>/,
-    '<script src="/boot.js?v=27" type="module"></script>',
+    '<script src="/boot.js?v=77" type="module"></script>',
   );
   const title = PAGE_TITLES[page];
   out = out.replace(

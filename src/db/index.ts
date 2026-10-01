@@ -189,6 +189,60 @@ CREATE TABLE IF NOT EXISTS mantra_fantasy_teams (
   synced_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS mantra_managers (
+  id INTEGER PRIMARY KEY,
+  nickname TEXT NOT NULL,
+  synced_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS mantra_table_rows (
+  league_slug TEXT NOT NULL,
+  team_id INTEGER NOT NULL,
+  manager_id TEXT NOT NULL,
+  team_name TEXT NOT NULL,
+  team_logo TEXT,
+  league_name TEXT NOT NULL,
+  flag TEXT,
+  division TEXT NOT NULL,
+  division_rank INTEGER NOT NULL DEFAULT 0,
+  games INTEGER NOT NULL DEFAULT 0,
+  wins REAL NOT NULL DEFAULT 0,
+  draws REAL NOT NULL DEFAULT 0,
+  loses REAL NOT NULL DEFAULT 0,
+  gf REAL NOT NULL DEFAULT 0,
+  ga REAL NOT NULL DEFAULT 0,
+  gd REAL NOT NULL DEFAULT 0,
+  points REAL NOT NULL DEFAULT 0,
+  ts REAL NOT NULL DEFAULT 0,
+  ideal_ts REAL,
+  ideal_pct REAL,
+  i_gf REAL,
+  i_ga REAL,
+  i_gd REAL,
+  i_pts REAL,
+  form_json TEXT,
+  ideal_rank INTEGER,
+  ideal_games INTEGER,
+  ideal_wins INTEGER,
+  ideal_draws INTEGER,
+  ideal_loses INTEGER,
+  ideal_avg_ts REAL,
+  ideal_form_json TEXT,
+  fetched_at TEXT,
+  PRIMARY KEY (league_slug, team_id)
+);
+CREATE INDEX IF NOT EXISTS idx_mantra_table_rows_manager
+  ON mantra_table_rows(manager_id);
+
+CREATE TABLE IF NOT EXISTS mantra_gw_player_scores (
+  slug TEXT NOT NULL,
+  round TEXT NOT NULL,
+  player_id INTEGER NOT NULL,
+  total REAL NOT NULL,
+  base REAL,
+  PRIMARY KEY (slug, round, player_id)
+);
+
 CREATE TABLE IF NOT EXISTS app_users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   google_sub TEXT NOT NULL UNIQUE,
@@ -453,8 +507,8 @@ CREATE TABLE IF NOT EXISTS footmops_predictions (
   club_key TEXT NOT NULL,
   source_club TEXT NOT NULL,
   source_player TEXT NOT NULL,
-  lineup_group TEXT NOT NULL CHECK (lineup_group IN ('starting', 'bench')),
-  displayed_percentage REAL NOT NULL,
+  lineup_group TEXT NOT NULL CHECK (lineup_group IN ('starting', 'bench', 'out')),
+  displayed_percentage REAL,
   mantra_player_id INTEGER,
   link_status TEXT NOT NULL CHECK (link_status IN ('linked', 'unmatched', 'ambiguous')),
   PRIMARY KEY (league, tour, club_key, source_player)
@@ -646,6 +700,51 @@ INSERT OR IGNORE INTO live_draft (id) VALUES (1);
 
 let db: Database.Database | null = null;
 
+export function migrateFootmopsPredictions(database: Database.Database): void {
+  const table = database
+    .prepare(
+      `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'footmops_predictions'`,
+    )
+    .get() as { sql: string } | undefined;
+  if (!table) return;
+  const allowsOut = table.sql.includes("'out'");
+  const pctNotNull = /displayed_percentage REAL NOT NULL/i.test(table.sql);
+  if (allowsOut && !pctNotNull) return;
+
+  database.pragma("foreign_keys = OFF");
+  try {
+    database.exec(`
+      BEGIN IMMEDIATE;
+      CREATE TABLE footmops_predictions_next (
+        league TEXT NOT NULL,
+        tour INTEGER NOT NULL,
+        club_key TEXT NOT NULL,
+        source_club TEXT NOT NULL,
+        source_player TEXT NOT NULL,
+        lineup_group TEXT NOT NULL CHECK (lineup_group IN ('starting', 'bench', 'out')),
+        displayed_percentage REAL,
+        mantra_player_id INTEGER,
+        link_status TEXT NOT NULL CHECK (link_status IN ('linked', 'unmatched', 'ambiguous')),
+        PRIMARY KEY (league, tour, club_key, source_player)
+      );
+      INSERT INTO footmops_predictions_next
+        SELECT league, tour, club_key, source_club, source_player, lineup_group,
+               displayed_percentage, mantra_player_id, link_status
+        FROM footmops_predictions;
+      DROP TABLE footmops_predictions;
+      ALTER TABLE footmops_predictions_next RENAME TO footmops_predictions;
+      CREATE INDEX IF NOT EXISTS idx_footmops_predictions_player
+        ON footmops_predictions(mantra_player_id);
+      COMMIT;
+    `);
+  } catch (error) {
+    database.exec(`ROLLBACK`);
+    throw error;
+  } finally {
+    database.pragma("foreign_keys = ON");
+  }
+}
+
 export function migrateMantraAuctionJobs(database: Database.Database): void {
   const columns = database
     .prepare(`PRAGMA table_info(mantra_auction_jobs)`)
@@ -714,6 +813,7 @@ export function migrateMantraAuctionJobs(database: Database.Database): void {
 
 function migrate(database: Database.Database): void {
   migrateMantraAuctionJobs(database);
+  migrateFootmopsPredictions(database);
 
   // Remove the retired server-side Companion token flow and any stored secrets.
   database.exec(`
@@ -1000,6 +1100,8 @@ function migrate(database: Database.Database): void {
       home_score_prob REAL,
       away_score_prob REAL,
       popular_score TEXT,
+      top_scores TEXT,
+      anytime_scorers TEXT,
       synced_at TEXT
     )
   `);
@@ -1127,6 +1229,8 @@ function migrate(database: Database.Database): void {
       ["home_score_prob", "REAL"],
       ["away_score_prob", "REAL"],
       ["popular_score", "TEXT"],
+      ["top_scores", "TEXT"],
+      ["anytime_scorers", "TEXT"],
     ] as Array<[string, string]>) {
       if (!names.has(col)) database.exec(`ALTER TABLE fixture_odds ADD COLUMN ${col} ${typ}`);
     }
@@ -1176,6 +1280,66 @@ function migrate(database: Database.Database): void {
       mapped_by_user_id INTEGER,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS mantra_doma_applications (
+      user_id INTEGER PRIMARY KEY,
+      team_name TEXT NOT NULL,
+      want_regular_auction INTEGER NOT NULL DEFAULT 0,
+      want_live_auction INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES app_users(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS mantra_managers (
+      id INTEGER PRIMARY KEY,
+      nickname TEXT NOT NULL,
+      synced_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS mantra_table_rows (
+      league_slug TEXT NOT NULL,
+      team_id INTEGER NOT NULL,
+      manager_id TEXT NOT NULL,
+      team_name TEXT NOT NULL,
+      team_logo TEXT,
+      league_name TEXT NOT NULL,
+      flag TEXT,
+      division TEXT NOT NULL,
+      division_rank INTEGER NOT NULL DEFAULT 0,
+      games INTEGER NOT NULL DEFAULT 0,
+      wins REAL NOT NULL DEFAULT 0,
+      draws REAL NOT NULL DEFAULT 0,
+      loses REAL NOT NULL DEFAULT 0,
+      gf REAL NOT NULL DEFAULT 0,
+      ga REAL NOT NULL DEFAULT 0,
+      gd REAL NOT NULL DEFAULT 0,
+      points REAL NOT NULL DEFAULT 0,
+      ts REAL NOT NULL DEFAULT 0,
+      ideal_ts REAL,
+      ideal_pct REAL,
+      i_gf REAL,
+      i_ga REAL,
+      i_gd REAL,
+      i_pts REAL,
+      form_json TEXT,
+      ideal_rank INTEGER,
+      ideal_games INTEGER,
+      ideal_wins INTEGER,
+      ideal_draws INTEGER,
+      ideal_loses INTEGER,
+      ideal_avg_ts REAL,
+      ideal_form_json TEXT,
+      fetched_at TEXT,
+      PRIMARY KEY (league_slug, team_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_mantra_table_rows_manager
+      ON mantra_table_rows(manager_id);
+    CREATE TABLE IF NOT EXISTS mantra_gw_player_scores (
+      slug TEXT NOT NULL,
+      round TEXT NOT NULL,
+      player_id INTEGER NOT NULL,
+      total REAL NOT NULL,
+      base REAL,
+      PRIMARY KEY (slug, round, player_id)
     );
   `);
 }

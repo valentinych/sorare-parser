@@ -12,6 +12,8 @@ import { sorareImportRoutes } from "./routes/sorareImport.js";
 import { expected11Routes } from "./routes/expected11.js";
 import { expected11PremiumRoutes } from "./routes/expected11Premium.js";
 import { leagueOneRoutes } from "./routes/leagueOne.js";
+import { mantraDomaRoutes } from "./routes/mantraDoma.js";
+import { mantraStandingsRoutes } from "./routes/mantraStandings.js";
 import { footmopsRoutes } from "./routes/footmops.js";
 import { liveDraftRoutes } from "./routes/liveDraft.js";
 import { liveDraftPageRoutes } from "./routes/liveDraftPage.js";
@@ -54,6 +56,8 @@ async function main() {
   await app.register(expected11Routes);
   await app.register(expected11PremiumRoutes);
   await app.register(leagueOneRoutes);
+  await app.register(mantraDomaRoutes);
+  await app.register(mantraStandingsRoutes);
   await app.register(footmopsRoutes);
   await app.register(liveDraftRoutes);
   await app.register(liveDraftPageRoutes, { publicDir });

@@ -21,7 +21,7 @@ type SorareCaptureFile = {
   leagueLabel?: string;
   probabilities?: Array<{
     name?: string;
-    percentage?: number;
+    percentage?: number | null;
     group?: string;
   }>;
 };
@@ -31,24 +31,42 @@ export type SorareFootmopsPublishScope = {
   tour: number;
 };
 
+function foldLeagueLabel(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase();
+}
+
 /** Map SorareInside labels like "England - Championship" → mantra slug. */
 export function mapSorareLeagueLabelToSlug(label: string): string | null {
   const raw = label.trim();
   if (!raw) return null;
   const asSlug = raw.toLowerCase();
   if (leagueBySlug(asSlug)?.mantraTournamentId) return asSlug;
-  const normalized = asSlug;
+  const folded = foldLeagueLabel(raw);
+  if (/\bsuper lig\b/.test(folded)) return "super-lig";
   const leagues = Object.values(AF_LEAGUES)
     .filter((league) => league.mantraTournamentId != null)
     .sort((a, b) => b.name.length - a.name.length);
   for (const league of leagues) {
-    if (normalized.includes(league.name.toLowerCase())) return league.slug;
+    const name = league.name.toLowerCase();
+    if (asSlug.includes(name) || folded.includes(foldLeagueLabel(league.name))) {
+      return league.slug;
+    }
   }
   return null;
 }
 
 function isLineupGroup(value: string): value is FootmopsLineupGroup {
-  return value === "starting" || value === "bench";
+  return value === "starting" || value === "bench" || value === "out";
+}
+
+function isCaptureChrome(name: string): boolean {
+  const trimmed = name.trim();
+  if (/sorareinside\.com/i.test(trimmed)) return true;
+  if (/^(first published|updated|copy lineup url)\b/i.test(trimmed)) return true;
+  return false;
 }
 
 function isUsablePlayerName(name: string): boolean {
@@ -63,14 +81,26 @@ function isUsablePlayerName(name: string): boolean {
   return true;
 }
 
+function finitePercentage(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 function playersFromCapture(raw: SorareCaptureFile): FootmopsPlayer[] {
   const out: FootmopsPlayer[] = [];
+  let stopOut = false;
   for (const row of raw.probabilities ?? []) {
     const name = typeof row.name === "string" ? row.name.trim() : "";
-    const percentage = Number(row.percentage);
     const group = typeof row.group === "string" ? row.group : "";
-    if (!isUsablePlayerName(name) || !Number.isFinite(percentage)) continue;
-    if (!isLineupGroup(group)) continue;
+    if (isCaptureChrome(name)) {
+      if (group === "out") stopOut = true;
+      continue;
+    }
+    if (!isUsablePlayerName(name) || !isLineupGroup(group)) continue;
+    if (group === "out" && stopOut) continue;
+    const percentage = finitePercentage(row.percentage);
+    if (group !== "out" && percentage == null) continue;
     out.push({ name, percentage, group });
   }
   return out;
@@ -233,10 +263,10 @@ export function normalizeFootmopsImportPayload(body: unknown): FootmopsSnapshot 
         if (!player || typeof player !== "object") continue;
         const p = player as Record<string, unknown>;
         const pname = typeof p.name === "string" ? p.name.trim() : "";
-        const percentage = Number(p.percentage);
         const group = typeof p.group === "string" ? p.group : "";
-        if (!isUsablePlayerName(pname) || !Number.isFinite(percentage)) continue;
-        if (!isLineupGroup(group)) continue;
+        if (!isUsablePlayerName(pname) || !isLineupGroup(group)) continue;
+        const percentage = finitePercentage(p.percentage);
+        if (group !== "out" && percentage == null) continue;
         players.push({ name: pname, percentage, group });
       }
       if (players.length) teams.push({ name, players });

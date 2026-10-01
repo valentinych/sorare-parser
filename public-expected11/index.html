@@ -366,6 +366,40 @@
       .tabs button[aria-selected="true"]:hover {
         background: #1058b7;
       }
+      .automops-caption {
+        margin: 0;
+        padding: 14px;
+        border-radius: 10px;
+        background: #0f161d;
+        color: #e8edf2;
+        font: 13px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace;
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow-x: auto;
+      }
+      .automops-match {
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid #dce1e5;
+      }
+      .automops-match h3 {
+        margin: 0 0 8px;
+        font-size: 16px;
+      }
+      .automops-images {
+        margin: 8px 0 0;
+        color: #5b6570;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      .automops-status.ok {
+        color: #1d6b35;
+        font-weight: 650;
+      }
+      .automops-status.err {
+        color: #a11;
+        font-weight: 650;
+      }
       .league-list,
       .match-list {
         display: grid;
@@ -497,6 +531,9 @@
         </button>
         <button type="button" role="tab" id="tab-sorare" aria-selected="false" aria-controls="panel-sorare">
           SorareInside
+        </button>
+        <button type="button" role="tab" id="tab-automops" aria-selected="false" aria-controls="panel-automops">
+          Automops
         </button>
       </div>
 
@@ -658,7 +695,8 @@
             set a round/tour next to each, then expand. Click a team side on a
             match to open the SorareInside popup, parse %, and screenshot the
             entire modal — or use <strong>Скачать оставшиеся</strong> to queue
-            every Home/Away that is not yet on disk. Sign in in the Chrome window if prompted, then
+            every Home/Away that is not yet on disk (up to 3 Chrome tabs in
+            parallel, same login profile). Sign in in the Chrome window if prompted, then
             <strong>Login complete — continue</strong>.
           </div>
         </form>
@@ -684,9 +722,19 @@
         <section class="card" id="sorare-matches-card" hidden>
           <div class="status-heading">
             <h2>Matches</h2>
-            <button id="sorare-capture-remaining" type="button" title="Capture remaining">
-              Скачать оставшиеся
-            </button>
+            <div class="controls" style="gap:8px;align-items:center;margin:0">
+              <label for="sorare-capture-parallel" class="muted" style="margin:0;white-space:nowrap">
+                Parallel
+                <select id="sorare-capture-parallel" title="How many Chrome tabs capture at once (max 3)">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3" selected>3</option>
+                </select>
+              </label>
+              <button id="sorare-capture-remaining" type="button" title="Capture remaining">
+                Скачать оставшиеся
+              </button>
+            </div>
           </div>
           <p class="muted" id="sorare-matches-hint"></p>
           <div class="match-list" id="sorare-matches"></div>
@@ -706,24 +754,90 @@
           <p class="muted" id="sorare-capture-status" style="margin-top:12px"></p>
         </section>
       </div>
+
+      <div id="panel-automops" role="tabpanel" aria-labelledby="tab-automops" hidden>
+        <form class="card" id="automops-form">
+          <div class="scope" id="automops-scope">
+            <label for="automops-league">Championship
+              <select id="automops-league" required></select>
+            </label>
+            <label for="automops-tour">Tour
+              <select id="automops-tour" required></select>
+            </label>
+          </div>
+          <p class="scope-hint">
+            Preview of what @draftmantra_bot would post to
+            <a href="https://t.me/automops" target="_blank" rel="noopener">t.me/automops</a>
+            for the selected championship + tour. Preview is dry-run only —
+            nothing is sent until you click <strong>Запостить</strong>.
+          </p>
+          <div class="controls">
+            <label class="checkbox">
+              <input id="automops-upcoming" type="checkbox" />
+              Only upcoming fixtures
+            </label>
+            <button class="secondary" id="automops-refresh" type="button">
+              Обновить превью
+            </button>
+            <button class="publish" id="automops-publish" type="button" disabled>
+              Запостить
+            </button>
+          </div>
+          <div class="notice">
+            Uses the same pipeline as
+            <code class="path">npm run publish:automops</code>
+            (Sorare / Expected11 / footmops + odds). Requires
+            <code class="path">DRAFTMANTRA_BOT_TOKEN</code> and
+            <code class="path">AUTOMOPS_CHANNEL_ID</code> in <code class="path">.env</code>.
+          </div>
+        </form>
+
+        <section class="card" aria-live="polite">
+          <div class="status-heading">
+            <h2>Automops status</h2>
+            <span class="badge" id="automops-state">Idle</span>
+          </div>
+          <p id="automops-message" class="automops-status">Select championship and tour.</p>
+          <p class="muted" id="automops-meta"></p>
+        </section>
+
+        <section class="card" id="automops-preview-card" hidden>
+          <div class="status-heading">
+            <h2>Channel post</h2>
+            <img id="automops-logo" alt="" width="36" height="36" hidden style="border-radius:8px" />
+          </div>
+          <div class="automops-caption" id="automops-main-caption"></div>
+          <div id="automops-matches"></div>
+        </section>
+      </div>
     </main>
 
     <script>
       const tabExpected11 = document.querySelector("#tab-expected11");
       const tabSorare = document.querySelector("#tab-sorare");
+      const tabAutomops = document.querySelector("#tab-automops");
       const panelExpected11 = document.querySelector("#panel-expected11");
       const panelSorare = document.querySelector("#panel-sorare");
+      const panelAutomops = document.querySelector("#panel-automops");
 
       function showTab(which) {
         const sorare = which === "sorare";
-        tabExpected11.setAttribute("aria-selected", sorare ? "false" : "true");
+        const automops = which === "automops";
+        tabExpected11.setAttribute(
+          "aria-selected",
+          !sorare && !automops ? "true" : "false",
+        );
         tabSorare.setAttribute("aria-selected", sorare ? "true" : "false");
-        panelExpected11.hidden = sorare;
+        tabAutomops.setAttribute("aria-selected", automops ? "true" : "false");
+        panelExpected11.hidden = sorare || automops;
         panelSorare.hidden = !sorare;
+        panelAutomops.hidden = !automops;
         if (sorare) refreshSorareStatus();
+        if (automops) ensureAutomopsReady();
       }
       tabExpected11.addEventListener("click", () => showTab("expected11"));
       tabSorare.addEventListener("click", () => showTab("sorare"));
+      tabAutomops.addEventListener("click", () => showTab("automops"));
 
       const form = document.querySelector("#run-form");
       const scopeEl = document.querySelector("#scope");
@@ -936,7 +1050,16 @@
       });
 
       async function request(path, options) {
-        const response = await fetch(path, options);
+        let response;
+        try {
+          response = await fetch(path, options);
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          throw new Error(
+            `Cannot reach Expected11 server on http://127.0.0.1:3002 (${detail}). ` +
+              "Restart with: npm run expected11:web",
+          );
+        }
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
         return body;
@@ -1265,12 +1388,14 @@
       const sorareMatches = document.querySelector("#sorare-matches");
       const sorareMatchesHint = document.querySelector("#sorare-matches-hint");
       const sorareCaptureRemaining = document.querySelector("#sorare-capture-remaining");
+      const sorareCaptureParallel = document.querySelector("#sorare-capture-parallel");
       const sorareCaptureStatus = document.querySelector("#sorare-capture-status");
       const sorarePublish = document.querySelector("#sorare-publish");
       const sorarePublishHint = document.querySelector("#sorare-publish-hint");
       const sorareOutputDir = document.querySelector("#sorare-output-dir");
       const sorarePickFolder = document.querySelector("#sorare-pick-folder");
       const SORARE_OUTPUT_DIR_KEY = "sorare-output-dir";
+      const SORARE_CAPTURE_PARALLEL_KEY = "sorare-capture-parallel";
       let sorareLeagueRows = new Map();
       let sorareLastState = "idle";
       let sorareRoundByLeague = new Map();
@@ -1281,13 +1406,36 @@
       let lastPostedOutputDir = "";
       let lastSorareMatches = [];
       let sorareCaptureBusy = false;
+      let sorareServerCaptureConcurrency = 3;
+
+      try {
+        const savedParallel = localStorage.getItem(SORARE_CAPTURE_PARALLEL_KEY);
+        if (savedParallel && sorareCaptureParallel) {
+          sorareCaptureParallel.value = savedParallel;
+        }
+      } catch (_) {}
+      sorareCaptureParallel?.addEventListener("change", () => {
+        try {
+          localStorage.setItem(
+            SORARE_CAPTURE_PARALLEL_KEY,
+            sorareCaptureParallel.value,
+          );
+        } catch (_) {}
+      });
+
+      function sorareParallelWorkers() {
+        const ui = Number(sorareCaptureParallel?.value || 3);
+        const capped = Number.isFinite(ui) ? Math.min(3, Math.max(1, Math.trunc(ui))) : 3;
+        return Math.min(capped, sorareServerCaptureConcurrency || 3);
+      }
 
       function mantraSlugFromSorareLabel(label) {
         const l = String(label || "").toLowerCase();
         if (l.includes("premier league")) return "premier-league";
         if (l.includes("championship")) return "championship";
         if (l.includes("serie a")) return "serie-a";
-        if (l.includes("bundesliga")) return "bundesliga";
+        // Top-flight only — do not map "Bundesliga 2" / "2. Bundesliga".
+        if (/(?<!\d\.)(?<!\d\.\s)\bbundesliga\b(?!\s*\d)/i.test(l)) return "bundesliga";
         if (l.includes("la liga")) return "la-liga";
         if (l.includes("ligue 1")) return "ligue-1";
         if (l.includes("süper") || l.includes("super lig")) return "super-lig";
@@ -1635,28 +1783,40 @@
         }
         sorareCaptureBusy = true;
         sorareCaptureRemaining.disabled = true;
+        if (sorareCaptureParallel) sorareCaptureParallel.disabled = true;
         const total = remaining.length;
+        const workers = Math.min(sorareParallelWorkers(), total);
         let ok = 0;
+        let nextIndex = 0;
         const failed = [];
         try {
-          for (let i = 0; i < remaining.length; i++) {
-            const item = remaining[i];
-            const saved = await captureSorareSide(
-              item.match,
-              item.side,
-              item.btn,
-              `Capturing ${i + 1}/${total} remaining…`,
-            );
-            if (saved) ok += 1;
-            else failed.push(`${item.teamName} (${item.side})`);
+          sorareCaptureStatus.textContent = `Capturing 0/${total} remaining (${workers} parallel)…`;
+          async function worker() {
+            while (nextIndex < remaining.length) {
+              const i = nextIndex;
+              nextIndex += 1;
+              const item = remaining[i];
+              const saved = await captureSorareSide(
+                item.match,
+                item.side,
+                item.btn,
+                `Capturing ${i + 1}/${total} remaining…`,
+              );
+              if (saved) ok += 1;
+              else failed.push(`${item.teamName} (${item.side})`);
+            }
           }
+          await Promise.all(
+            Array.from({ length: workers }, () => worker()),
+          );
           sorareCaptureStatus.textContent =
             failed.length === 0
-              ? `Captured remaining ${ok}/${total}.`
+              ? `Captured remaining ${ok}/${total} (${workers} parallel).`
               : `Captured remaining ${ok}/${total} · ${failed.length} failed: ${failed.join(", ")}.`;
         } finally {
           sorareCaptureBusy = false;
           sorareCaptureRemaining.disabled = false;
+          if (sorareCaptureParallel) sorareCaptureParallel.disabled = false;
         }
       }
 
@@ -1671,6 +1831,23 @@
           sorarePublishConfigured = Boolean(status.publishConfigured);
           sorarePublish.disabled = !sorarePublishConfigured;
           applySorareOutputDir(status);
+          if (
+            Number.isFinite(Number(status.captureConcurrency)) &&
+            Number(status.captureConcurrency) >= 1
+          ) {
+            sorareServerCaptureConcurrency = Math.min(
+              3,
+              Math.max(1, Math.trunc(Number(status.captureConcurrency))),
+            );
+            if (sorareCaptureParallel) {
+              for (const opt of sorareCaptureParallel.options) {
+                opt.disabled = Number(opt.value) > sorareServerCaptureConcurrency;
+              }
+              if (Number(sorareCaptureParallel.value) > sorareServerCaptureConcurrency) {
+                sorareCaptureParallel.value = String(sorareServerCaptureConcurrency);
+              }
+            }
+          }
           if (!sorarePublishConfigured) {
             sorarePublishHint.textContent =
               "Publish disabled: set EXPECTED11_IMPORT_TOKEN in .env, then restart this UI. " +
@@ -1833,6 +2010,241 @@
       setInterval(() => {
         if (!panelSorare.hidden) refreshSorareStatus();
       }, 1000);
+
+      // --- Automops tab ---
+      const automopsLeague = document.querySelector("#automops-league");
+      const automopsTour = document.querySelector("#automops-tour");
+      const automopsUpcoming = document.querySelector("#automops-upcoming");
+      const automopsRefresh = document.querySelector("#automops-refresh");
+      const automopsPublish = document.querySelector("#automops-publish");
+      const automopsState = document.querySelector("#automops-state");
+      const automopsMessage = document.querySelector("#automops-message");
+      const automopsMeta = document.querySelector("#automops-meta");
+      const automopsPreviewCard = document.querySelector("#automops-preview-card");
+      const automopsMainCaption = document.querySelector("#automops-main-caption");
+      const automopsMatches = document.querySelector("#automops-matches");
+      const automopsLogo = document.querySelector("#automops-logo");
+      let automopsReady = false;
+      let automopsSeason = null;
+      let automopsPreview = null;
+      let automopsLoading = false;
+
+      function setAutomopsStatus(state, message, { ok, err } = {}) {
+        automopsState.textContent = state;
+        automopsState.className = "badge";
+        if (state === "Loading" || state === "Posting") {
+          automopsState.classList.add("running");
+        }
+        automopsMessage.textContent = message || "";
+        automopsMessage.className = "automops-status";
+        if (ok) automopsMessage.classList.add("ok");
+        if (err) automopsMessage.classList.add("err");
+      }
+
+      function renderAutomopsPreview(data) {
+        automopsPreview = data;
+        automopsPreviewCard.hidden = false;
+        if (data.logoUrl) {
+          automopsLogo.src = data.logoUrl;
+          automopsLogo.alt = data.leagueName || "";
+          automopsLogo.hidden = false;
+        } else {
+          automopsLogo.hidden = true;
+        }
+        automopsMainCaption.innerHTML = data.mainCaption || "";
+        automopsMatches.innerHTML = "";
+        for (const match of data.matches || []) {
+          const block = document.createElement("div");
+          block.className = "automops-match";
+          const title = document.createElement("h3");
+          title.textContent = `${match.home} — ${match.away}`;
+          const kick = document.createElement("p");
+          kick.className = "muted";
+          kick.style.margin = "0 0 8px";
+          kick.textContent = match.kickoffLabel || match.kickoff || "";
+          const caption = document.createElement("div");
+          caption.className = "automops-caption";
+          caption.innerHTML = match.caption || "";
+          const imgs = document.createElement("p");
+          imgs.className = "automops-images";
+          imgs.textContent = match.images?.length
+            ? `Media: ${match.images.join(", ")}`
+            : "Media: (none on disk)";
+          block.append(title, kick, caption, imgs);
+          automopsMatches.append(block);
+        }
+        automopsMeta.textContent =
+          `${data.leagueName} · GW ${data.tour} · ${data.afRound}` +
+          ` · season ${data.season} · matches ${data.matches?.length || 0}` +
+          ` · channel ${data.channelId || "@automops"}` +
+          (data.botConfigured ? "" : " · ⚠ bot token missing");
+        automopsPublish.disabled = !data.botConfigured || !(data.matches?.length);
+      }
+
+      async function loadAutomopsTours() {
+        const leagueId = automopsLeague.value;
+        if (!leagueId) return;
+        const q = new URLSearchParams({ league: leagueId });
+        if (automopsSeason != null) q.set("season", String(automopsSeason));
+        const data = await request(`/api/automops/tours?${q}`);
+        automopsSeason = data.season;
+        const prev = automopsTour.value;
+        automopsTour.innerHTML = "";
+        for (const t of data.tours || []) {
+          const opt = document.createElement("option");
+          opt.value = String(t.tour);
+          opt.textContent =
+            `GW ${t.tour}` +
+            (t.current ? " (current)" : "") +
+            (t.startAt ? ` · ${String(t.startAt).slice(0, 10)}` : "");
+          automopsTour.append(opt);
+        }
+        const prefer =
+          (prev && [...automopsTour.options].some((o) => o.value === prev) && prev) ||
+          (data.currentTour != null ? String(data.currentTour) : "") ||
+          automopsTour.options[0]?.value ||
+          "";
+        if (prefer) automopsTour.value = prefer;
+      }
+
+      async function loadAutomopsPreview() {
+        if (automopsLoading) return;
+        const leagueId = automopsLeague.value;
+        const tour = automopsTour.value;
+        if (!leagueId || !tour) return;
+        automopsLoading = true;
+        automopsRefresh.disabled = true;
+        automopsPublish.disabled = true;
+        setAutomopsStatus("Loading", "Building dry-run preview…");
+        try {
+          const q = new URLSearchParams({
+            league: leagueId,
+            tour,
+          });
+          if (automopsSeason != null) q.set("season", String(automopsSeason));
+          if (automopsUpcoming.checked) q.set("upcoming", "1");
+          const data = await request(`/api/automops/preview?${q}`);
+          renderAutomopsPreview(data);
+          setAutomopsStatus(
+            "Ready",
+            `Preview ready for ${data.leagueName} GW ${data.tour} (${data.matches.length} matches). Nothing posted yet.`,
+            { ok: true },
+          );
+        } catch (error) {
+          automopsPreview = null;
+          automopsPreviewCard.hidden = true;
+          automopsPublish.disabled = true;
+          setAutomopsStatus("Error", error.message, { err: true });
+        } finally {
+          automopsLoading = false;
+          automopsRefresh.disabled = false;
+        }
+      }
+
+      async function ensureAutomopsReady() {
+        if (!automopsReady) {
+          try {
+            const data = await request("/api/automops/leagues");
+            automopsSeason = data.season;
+            automopsLeague.innerHTML = "";
+            for (const league of data.leagues || []) {
+              const opt = document.createElement("option");
+              opt.value = String(league.id);
+              opt.textContent = league.name;
+              automopsLeague.append(opt);
+            }
+            const def = data.defaultLeagueId != null
+              ? String(data.defaultLeagueId)
+              : automopsLeague.options[0]?.value;
+            if (def) automopsLeague.value = def;
+            automopsReady = true;
+            await loadAutomopsTours();
+          } catch (error) {
+            setAutomopsStatus("Error", error.message, { err: true });
+            return;
+          }
+        }
+        await loadAutomopsPreview();
+      }
+
+      automopsLeague.addEventListener("change", async () => {
+        try {
+          await loadAutomopsTours();
+          await loadAutomopsPreview();
+        } catch (error) {
+          setAutomopsStatus("Error", error.message, { err: true });
+        }
+      });
+      automopsTour.addEventListener("change", () => {
+        loadAutomopsPreview().catch((error) => {
+          setAutomopsStatus("Error", error.message, { err: true });
+        });
+      });
+      automopsUpcoming.addEventListener("change", () => {
+        loadAutomopsPreview().catch((error) => {
+          setAutomopsStatus("Error", error.message, { err: true });
+        });
+      });
+      automopsRefresh.addEventListener("click", () => {
+        loadAutomopsPreview().catch((error) => {
+          setAutomopsStatus("Error", error.message, { err: true });
+        });
+      });
+      document.querySelector("#automops-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+      });
+      automopsPublish.addEventListener("click", async () => {
+        if (!automopsPreview) return;
+        const label =
+          `${automopsPreview.leagueName} GW ${automopsPreview.tour}` +
+          ` (${automopsPreview.matches.length} matches)`;
+        if (
+          !confirm(
+            `Запостить в t.me/automops?\n\n${label}\n\nЭто отправит пост в канал и комментарии к матчам.`,
+          )
+        ) {
+          return;
+        }
+        automopsPublish.disabled = true;
+        automopsRefresh.disabled = true;
+        setAutomopsStatus("Posting", "Publishing to Telegram… (can take a minute)");
+        try {
+          const body = {
+            league: Number(automopsLeague.value),
+            tour: Number(automopsTour.value),
+            season: automopsSeason,
+            upcomingOnly: automopsUpcoming.checked,
+          };
+          const result = await request("/api/automops/publish", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const link = result.channelUrl
+            ? ` → ${result.channelUrl}`
+            : result.channelMessageId
+              ? ` · message_id=${result.channelMessageId}`
+              : "";
+          const warn = result.warning ? ` · ${result.warning}` : "";
+          const fails = result.failures?.length
+            ? ` · ${result.failures.length} comment failures`
+            : "";
+          setAutomopsStatus(
+            "Done",
+            `Posted GW ${result.tour}: comments ${result.comments}/${result.commentsExpected}${link}${warn}${fails}`,
+            { ok: true },
+          );
+          if (result.channelUrl) {
+            automopsMeta.innerHTML =
+              `${automopsMeta.textContent || ""} · <a href="${result.channelUrl}" target="_blank" rel="noopener">${result.channelUrl}</a>`;
+          }
+        } catch (error) {
+          setAutomopsStatus("Error", error.message, { err: true });
+        } finally {
+          automopsRefresh.disabled = false;
+          automopsPublish.disabled = !automopsPreview?.botConfigured;
+        }
+      });
     </script>
   </body>
 </html>

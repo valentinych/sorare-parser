@@ -32,6 +32,14 @@ import {
   publishFootmopsSnapshot,
 } from "./domain/sorareFootmopsPublish.js";
 import { parseScreenshotTour } from "./domain/expected11Screenshot.js";
+import {
+  automopsBotTokenConfigured,
+  buildAutomopsPreview,
+  channelId as automopsChannelId,
+  listAutomopsLeagues,
+  listAutomopsTours,
+  publishAutomops,
+} from "./domain/automopsPublish.mjs";
 import { getSorareInsideSession } from "./sync/sorareInsideLineups.js";
 import {
   parseExpected11MatchUrl,
@@ -943,9 +951,10 @@ export function buildExpected11App(
         ...result,
       };
     } catch (error) {
-      return reply.code(400).send({
-        error: error instanceof Error ? error.message : String(error),
-      });
+      const message = error instanceof Error ? error.message : String(error);
+      const conflict =
+        /already running|capture slots are busy/i.test(message);
+      return reply.code(conflict ? 409 : 400).send({ error: message });
     }
   });
 
@@ -1011,6 +1020,126 @@ export function buildExpected11App(
       totals,
       results,
     };
+  });
+
+  app.get("/api/automops/leagues", async () => ({
+    defaultLeagueId: 135,
+    season: config.predictSeason,
+    channelId: automopsChannelId(),
+    botConfigured: automopsBotTokenConfigured(),
+    leagues: listAutomopsLeagues(),
+  }));
+
+  app.get("/api/automops/tours", async (request, reply) => {
+    const query = request.query as { league?: string; season?: string };
+    const leagueId = Number(query.league || 135);
+    const season = query.season
+      ? Number(query.season)
+      : config.predictSeason;
+    if (!Number.isFinite(leagueId) || leagueId <= 0) {
+      return reply.code(400).send({ error: "league must be a positive number." });
+    }
+    try {
+      return listAutomopsTours(leagueId, season);
+    } catch (error) {
+      return reply.code(400).send({
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.get("/api/automops/preview", async (request, reply) => {
+    const query = request.query as {
+      league?: string;
+      season?: string;
+      tour?: string;
+      upcoming?: string;
+    };
+    const leagueId = Number(query.league || 135);
+    const season = query.season
+      ? Number(query.season)
+      : config.predictSeason;
+    const tour =
+      query.tour != null && String(query.tour).trim() !== ""
+        ? Number(query.tour)
+        : undefined;
+    const upcomingOnly =
+      query.upcoming === "1" ||
+      query.upcoming === "true" ||
+      query.upcoming === "yes";
+    if (!Number.isFinite(leagueId) || leagueId <= 0) {
+      return reply.code(400).send({ error: "league must be a positive number." });
+    }
+    if (tour != null && (!Number.isFinite(tour) || tour <= 0)) {
+      return reply.code(400).send({ error: "tour must be a positive number." });
+    }
+    try {
+      return await buildAutomopsPreview({
+        leagueId,
+        season,
+        tour,
+        upcomingOnly,
+      });
+    } catch (error) {
+      return reply.code(400).send({
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.post("/api/automops/publish", async (request, reply) => {
+    const body = (request.body ?? {}) as {
+      league?: unknown;
+      season?: unknown;
+      tour?: unknown;
+      upcoming?: unknown;
+      upcomingOnly?: unknown;
+    };
+    const leagueId = Number(body.league ?? 135);
+    const season =
+      body.season != null && String(body.season).trim() !== ""
+        ? Number(body.season)
+        : config.predictSeason;
+    const tour =
+      body.tour != null && String(body.tour).trim() !== ""
+        ? Number(body.tour)
+        : undefined;
+    const upcomingOnly = Boolean(body.upcomingOnly ?? body.upcoming);
+    if (!Number.isFinite(leagueId) || leagueId <= 0) {
+      return reply.code(400).send({ error: "league must be a positive number." });
+    }
+    if (tour != null && (!Number.isFinite(tour) || tour <= 0)) {
+      return reply.code(400).send({ error: "tour must be a positive number." });
+    }
+    if (!automopsBotTokenConfigured()) {
+      return reply.code(503).send({
+        error: "Set DRAFTMANTRA_BOT_TOKEN in .env before publishing.",
+      });
+    }
+    try {
+      const result = await publishAutomops({
+        leagueId,
+        season,
+        tour,
+        upcomingOnly,
+      });
+      return result;
+    } catch (error) {
+      const err = error as Error & {
+        code?: string;
+        channelMessageId?: number;
+        channelUrl?: string | null;
+      };
+      const message = err instanceof Error ? err.message : String(error);
+      if (err.code === "automops_busy") {
+        return reply.code(409).send({ error: message });
+      }
+      return reply.code(502).send({
+        error: message,
+        channelMessageId: err.channelMessageId ?? null,
+        channelUrl: err.channelUrl ?? null,
+      });
+    }
   });
 
   void app.register(fastifyStatic, {

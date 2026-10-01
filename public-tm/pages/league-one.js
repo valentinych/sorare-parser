@@ -1,4 +1,4 @@
-import { accountState, apiJson, esc } from "../core.js?v=7";
+import { accountState, apiJson, esc } from "../core.js?v=11";
 
 let leagueOneData = null;
 /** @type {any} */
@@ -17,6 +17,23 @@ let multiFiltersBound = false;
 let reportsFiltersBound = false;
 let activeTab = "players";
 let reportsLoaded = false;
+
+function isLeagueOneAdmin() {
+  return Boolean(accountState.authenticated && accountState.entitlements?.expected11Admin);
+}
+
+function syncAdminChrome() {
+  const admin = isLeagueOneAdmin();
+  const refresh = document.getElementById("league-one-refresh");
+  if (refresh) refresh.hidden = !admin;
+  const bar = document.querySelector(".league-one-assign-bar");
+  if (bar) {
+    bar.hidden = !admin;
+    bar.style.display = admin ? "" : "none";
+  }
+  const reportsSync = document.getElementById("league-one-reports-sync");
+  if (reportsSync) reportsSync.hidden = !admin;
+}
 
 function dash(value) {
   return value == null || value === "" ? "—" : value;
@@ -448,6 +465,11 @@ function renderOrphans(snapshot) {
   const wrap = document.getElementById("league-one-orphans-wrap");
   const box = document.getElementById("league-one-orphans");
   if (!wrap || !box) return;
+  if (!isLeagueOneAdmin()) {
+    wrap.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
   const orphans = snapshot?.fotmobOrphans || [];
   wrap.hidden = orphans.length === 0;
   if (!orphans.length) {
@@ -525,13 +547,18 @@ function renderOrphans(snapshot) {
 function mantraChips(row) {
   const positions = row.mantraPositions || [];
   if (!positions.length) return `<span class="league-one-mantra-empty">—</span>`;
+  const admin = isLeagueOneAdmin();
   return positions
     .map(
       (pos) => `<span class="league-one-mantra-chip">
-        ${esc(pos)}
+        ${esc(pos)}${
+          admin
+            ? `
         <button type="button" class="league-one-mantra-remove"
           data-tm-id="${esc(row.tmPlayerId)}" data-pos="${esc(pos)}"
-          aria-label="Удалить ${esc(pos)}">×</button>
+          aria-label="Удалить ${esc(pos)}">×</button>`
+            : ""
+        }
       </span>`,
     )
     .join("");
@@ -562,9 +589,10 @@ function renderLeagueOne() {
   body.innerHTML = rows.length
     ? rows
         .map((row) => {
+          const admin = isLeagueOneAdmin();
           const fotmob = row.fotmobName
             ? `${esc(row.fotmobName)}${
-                row.manualMapping
+                row.manualMapping && admin
                   ? ` <button type="button" class="col-picker-btn league-one-unmap" data-tm-id="${esc(
                       row.tmPlayerId,
                     )}">Отвязать</button>`
@@ -581,8 +609,12 @@ function renderLeagueOne() {
             : statusLabel(row.matchStatus);
           return `<tr>
             <td class="league-one-check-col">
-              <input type="checkbox" class="league-one-player-select"
-                data-tm-id="${esc(row.tmPlayerId)}"${checked} />
+              ${
+                admin
+                  ? `<input type="checkbox" class="league-one-player-select"
+                data-tm-id="${esc(row.tmPlayerId)}"${checked} />`
+                  : ""
+              }
             </td>
             <td>${esc(row.tmClubName)}</td>
             <td>${esc(row.tmName)}</td>
@@ -824,10 +856,8 @@ document.getElementById("league-one-reports-sync")?.addEventListener("click", ()
 });
 
 export async function start(page) {
-  if (page === "league-one" && !accountState.entitlements?.expected11Admin) {
-    location.replace("/clubs");
-    return;
-  }
+  if (page !== "league-one") return;
+  syncAdminChrome();
   ensureMultiFiltersUi();
   setLeagueOneTab("players");
   await loadLeagueOne(false);

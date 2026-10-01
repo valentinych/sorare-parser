@@ -33,6 +33,7 @@ import {
   syncMantraLineups,
 } from "../sync/syncMantraLineups.js";
 import { syncAllLiveMantraFotmobIds } from "../lib/mantraFotmobIds.js";
+import { warmPremiumOddsJoin } from "../domain/expected11Premium.js";
 import {
   allLiveLeagues,
   DEFAULT_LIVE_SLUG,
@@ -328,6 +329,15 @@ export async function runLiveComputeWarmup(reason: string): Promise<void> {
     computeDreamTeamOfRound(round, league.slug, { blockOnMiss: true });
     await new Promise<void>((resolve) => setImmediate(resolve));
     computeIdealVsRealStandings(round, league.slug, { blockOnMiss: true });
+  }
+  try {
+    warmPremiumOddsJoin();
+    console.log("premium odds-join cache ready");
+  } catch (error) {
+    console.warn(
+      "premium odds-join warmup failed:",
+      error instanceof Error ? error.message : error,
+    );
   }
   console.log(`Live compute warmup (${reason}) done`);
 }

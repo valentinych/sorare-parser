@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Manrope:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=133" />
+    <link rel="stylesheet" href="/styles.css?v=163" />
     <script>
       (function () {
         var map = {
@@ -19,11 +19,13 @@
           matches: "/matches",
           live: "/live",
           auctions: "/auctions",
+          tables: "/tables",
           xi: "/xi",
           sorare: "/sorare",
           mapping: "/mapping",
           premium: "/premium",
           "league-one": "/league-one",
+          "mantra-doma": "/mantra-doma",
           builder: "/builder",
           ref: "/ref",
           "live-draft": "/live-draft",
@@ -52,6 +54,12 @@
         </label>
       </div>
       <div class="top-right">
+        <div class="lang-switch" role="group" aria-label="Язык интерфейса">
+          <button type="button" class="lang-switch-btn" data-locale="uk" title="Українська">UA</button>
+          <button type="button" class="lang-switch-btn" data-locale="be" title="Беларуская">BY</button>
+          <button type="button" class="lang-switch-btn" data-locale="ru" title="Русский">RU</button>
+          <button type="button" class="lang-switch-btn" data-locale="en" title="English">EN</button>
+        </div>
         <div class="account-bar">
           <a class="account-login" id="account-login" href="/auth/google">Войти через Google</a>
           <button type="button" class="account-button" id="account-button" hidden>
@@ -78,11 +86,13 @@
         <nav class="tabs" role="tablist">
           <a class="tab" data-view="live" href="/live" aria-selected="false">Live</a>
           <a class="tab" data-view="auctions" href="/auctions" aria-selected="false">Аукционы</a>
+          <a class="tab" data-view="tables" href="/tables" aria-selected="false">Таблицы</a>
           <a class="tab" data-view="xi" href="/xi" aria-selected="false">Предикты XI</a>
           <a class="tab" data-view="sorare" href="/sorare" aria-selected="false">Фейк Мопс</a>
           <a class="tab" data-view="mapping" href="/mapping" aria-selected="false" hidden>Mapping</a>
           <a class="tab" data-view="premium" href="/premium" aria-selected="false" hidden>Premium</a>
-          <a class="tab" data-view="league-one" href="/league-one" aria-selected="false" hidden>League One</a>
+          <a class="tab" data-view="league-one" href="/league-one" aria-selected="false">League One</a>
+          <a class="tab" data-view="mantra-doma" href="/mantra-doma" aria-selected="false">Mantra Дома</a>
           <a class="tab" data-view="live-draft" href="/live-draft" aria-selected="false" hidden>Живой аукцион АПЛ</a>
           <a class="tab" data-view="builder" href="/builder" aria-selected="false">Squad Builder</a>
         </nav>
@@ -610,6 +620,175 @@
 
       
 
+<!--spa-view:tables-->
+<section id="view-tables" class="view" hidden>
+        <div class="tables-head">
+          <div>
+            <h2>Таблицы</h2>
+            <p class="meta"><span>Сводная таблица Mantra</span>. <span>Другие таблицы появятся позже.</span></p>
+            <p class="meta" id="tables-meta" role="status" aria-live="polite">Загрузка таблицы…</p>
+            <div class="sync-progress tables-progress" id="tables-progress" hidden>
+              <div class="sync-progress-head">
+                <span id="tables-progress-label">Загрузка данных лиги</span>
+                <span id="tables-progress-pct">0%</span>
+              </div>
+              <div class="sync-progress-bar" aria-hidden="true">
+                <div class="sync-progress-fill" id="tables-progress-fill"></div>
+              </div>
+              <p class="sync-progress-detail" id="tables-progress-detail"></p>
+            </div>
+          </div>
+          <button type="button" class="col-picker-btn" id="tables-refresh">Обновить</button>
+        </div>
+        <p class="meta tables-empty" id="tables-empty" hidden>Нет строк таблицы для этого чемпионата.</p>
+        <div class="table-wrap standings-wrap league-only" id="tables-combined-wrap">
+          <table class="data-table standings-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Дивизион</th>
+                <th>Команда</th>
+                <th title="Games">G</th>
+                <th class="sortable" data-tables-sort="wins" aria-sort="none" title="Wins">W</th>
+                <th class="sortable" data-tables-sort="draws" aria-sort="none" title="Draws">D</th>
+                <th class="sortable" data-tables-sort="loses" aria-sort="none" title="Loses">L</th>
+                <th class="sortable" data-tables-sort="gf" aria-sort="none">GF</th>
+                <th class="sortable" data-tables-sort="ga" aria-sort="none">GA</th>
+                <th class="sortable" data-tables-sort="gd" aria-sort="none">GD</th>
+                <th class="sortable" data-tables-sort="points" aria-sort="none">POINTS</th>
+                <th class="sortable" data-tables-sort="iGf" aria-sort="none" title="GF идеальной таблицы дивизиона">iGF</th>
+                <th class="sortable" data-tables-sort="gfDiff" aria-sort="none" title="GF − iGF (реальные голы минус идеальная таблица)">DIFF</th>
+                <th class="sortable" data-tables-sort="iGa" aria-sort="none" title="GA идеальной таблицы дивизиона">iGA</th>
+                <th class="sortable" data-tables-sort="iGd" aria-sort="none" title="GD идеальной таблицы дивизиона">iGD</th>
+                <th class="sortable" data-tables-sort="iPts" aria-sort="none" title="POINTS идеальной таблицы дивизиона">iPTS</th>
+                <th class="sortable" data-tables-sort="ptsDiff" aria-sort="none" title="PTS − iPTS (очки Mantra минус идеальная таблица)">DP</th>
+                <th class="sortable" data-tables-sort="ts" aria-sort="none">TS</th>
+                <th class="sortable" data-tables-sort="idealTs" aria-sort="none" title="Сумма Ideal XI за завершённые туры">IDEAL TS</th>
+                <th class="sortable" data-tables-sort="idealPct" aria-sort="none" title="TS / Ideal TS × 100 за те же туры, что в GAMES">% к идеалу</th>
+                <th>FORM</th>
+              </tr>
+            </thead>
+            <tbody id="tables-body"></tbody>
+          </table>
+        </div>
+        <div class="table-wrap standings-wrap managers-only" id="managers-wrap" hidden>
+          <table class="data-table standings-table" id="managers-table">
+            <thead>
+              <tr>
+                <th class="sortable" data-managers-sort="rank" aria-sort="none">#</th>
+                <th class="sortable" data-managers-sort="managerName" aria-sort="none">Менеджер</th>
+                <th class="sortable" data-managers-sort="games" aria-sort="none" title="Games">G</th>
+                <th class="sortable" data-managers-sort="clubs" aria-sort="none" title="Сколько команд менеджера играют в чемпионатах">К</th>
+                <th class="sortable" data-managers-sort="wins" aria-sort="none" title="Wins">W*</th>
+                <th class="sortable" data-managers-sort="draws" aria-sort="none" title="Draws">D*</th>
+                <th class="sortable" data-managers-sort="loses" aria-sort="none" title="Loses">L*</th>
+                <th class="sortable" data-managers-sort="gf" aria-sort="none">GF*</th>
+                <th class="sortable" data-managers-sort="ga" aria-sort="none">GA*</th>
+                <th class="sortable" data-managers-sort="gd" aria-sort="none">GD*</th>
+                <th class="sortable" data-managers-sort="points" aria-sort="none">POINTS*</th>
+                <th class="sortable" data-managers-sort="iGf" aria-sort="none" title="GF идеальной таблицы дивизиона">iGF*</th>
+                <th class="sortable" data-managers-sort="iGa" aria-sort="none" title="GA идеальной таблицы дивизиона">iGA*</th>
+                <th class="sortable" data-managers-sort="iGd" aria-sort="none" title="GD идеальной таблицы дивизиона">iGD*</th>
+                <th class="sortable" data-managers-sort="iPts" aria-sort="none" title="POINTS идеальной таблицы дивизиона">iPTS*</th>
+                <th class="sortable" data-managers-sort="ptsDiff" aria-sort="none" title="PTS − iPTS за матч">DP*</th>
+                <th class="sortable" data-managers-sort="ts" aria-sort="none">TS</th>
+                <th class="sortable" data-managers-sort="idealTs" aria-sort="none" title="Средний Ideal XI за матч">IDEAL TS</th>
+                <th class="sortable" data-managers-sort="idealPct" aria-sort="none" title="сумма TS / сумма Ideal TS">% к идеалу</th>
+              </tr>
+            </thead>
+            <tbody id="managers-body"></tbody>
+          </table>
+        </div>
+        <p class="note managers-only" id="managers-scale-note" hidden>* Средние за матч показаны на 100 матчей (×100).</p>
+        <div class="managers-pick managers-only" id="managers-pick" hidden>
+          <label class="comp-pick">
+            Менеджер
+            <select id="managers-select">
+              <option value="">Выберите менеджера</option>
+            </select>
+          </label>
+        </div>
+
+        <section class="ideal-tables-block" id="ideal-tables">
+          <div class="tables-head">
+            <div>
+              <h2>Идеальные Таблицы</h2>
+              <p class="meta">Таблица дивизиона, если все выставили Ideal XI. <span>клик по строке — сравнение XI</span></p>
+              <p class="meta" id="ideal-tables-meta" role="status" aria-live="polite"></p>
+            </div>
+            <label class="comp-pick league-only">
+              Дивизион
+              <select id="ideal-division-select">
+                <option value="">Выберите дивизион</option>
+              </select>
+            </label>
+          </div>
+          <p class="meta tables-empty" id="ideal-tables-empty">Выберите дивизион</p>
+          <div class="table-wrap standings-wrap" id="ideal-tables-wrap" hidden>
+            <table class="data-table standings-table" id="ideal-tables-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th class="managers-only">Лига</th>
+                  <th>Команда</th>
+                  <th title="Games">G</th>
+                  <th class="sortable" data-ideal-sort="wins" aria-sort="none" title="Wins">W</th>
+                  <th class="sortable" data-ideal-sort="draws" aria-sort="none" title="Draws">D</th>
+                  <th class="sortable" data-ideal-sort="loses" aria-sort="none" title="Loses">L</th>
+                  <th class="sortable" data-ideal-sort="gf" aria-sort="none" title="Голы Ideal XI">GF</th>
+                  <th class="sortable" data-ideal-sort="ga" aria-sort="none" title="Пропущенные Ideal XI">GA</th>
+                  <th class="sortable" data-ideal-sort="gd" aria-sort="none">GD</th>
+                  <th class="sortable" data-ideal-sort="points" aria-sort="none">POINTS</th>
+                  <th class="sortable" data-ideal-sort="ts" aria-sort="none" title="Сумма Ideal XI">IDEAL TS</th>
+                  <th class="sortable" data-ideal-sort="avgTs" aria-sort="none" title="Средний Ideal XI">AVG XI</th>
+                  <th>FORM</th>
+                </tr>
+              </thead>
+              <tbody id="ideal-tables-body"></tbody>
+            </table>
+          </div>
+          <div class="real-tables-block" id="real-tables" hidden>
+            <div class="tables-head">
+              <div>
+                <h2>Реальная таблица</h2>
+                <p class="meta" id="real-tables-meta" role="status" aria-live="polite"></p>
+              </div>
+            </div>
+            <p class="meta tables-empty" id="real-tables-empty" hidden></p>
+            <div class="table-wrap standings-wrap" id="real-tables-wrap" hidden>
+              <table class="data-table standings-table" id="real-tables-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th class="managers-only">Лига</th>
+                    <th>Команда</th>
+                    <th title="Games">G</th>
+                    <th title="Wins">W</th>
+                    <th title="Draws">D</th>
+                    <th title="Loses">L</th>
+                    <th>GF</th>
+                    <th>GA</th>
+                    <th>GD</th>
+                    <th>POINTS</th>
+                    <th>TS</th>
+                    <th>FORM</th>
+                  </tr>
+                </thead>
+                <tbody id="real-tables-body"></tbody>
+              </table>
+            </div>
+          </div>
+          <details class="ideal-tour-results league-only" id="ideal-tour-results" hidden>
+            <summary>Результаты туров</summary>
+            <p class="meta">клик по строке — сравнение XI</p>
+            <div id="ideal-tour-results-body"></div>
+          </details>
+        </section>
+</section>
+<!--/spa-view:tables-->
+
+      
+
 <!--spa-view:mapping-->
 <section id="view-mapping" class="view" hidden>
         <div class="toolbar wrap">
@@ -643,6 +822,15 @@
             <select id="premium-team"><option value="">Все команды</option></select>
           </label>
           <button type="button" class="col-picker-btn" id="premium-refresh">Обновить состав моей команды</button>
+          <button
+            type="button"
+            class="col-picker-btn"
+            id="premium-refresh-auctions"
+            hidden
+            title="Обновить статус после рассчитанных раундов аукциона"
+          >
+            Обновить после раундов аукциона
+          </button>
           <p class="meta" id="premium-meta">Загрузка Premium…</p>
         </div>
         <p class="premium-help" id="premium-help"></p>
@@ -660,12 +848,62 @@
           <p class="premium-selection-message" id="premium-selection-message" role="status"></p>
           <div class="premium-formations" id="premium-formations"></div>
         </section>
+        <section class="premium-squad-report" id="premium-squad-report">
+          <div class="premium-selection-head">
+            <div>
+              <h2>Отчёт по составу</h2>
+              <p class="meta" id="premium-squad-report-meta">Выбери команду — минуты, оценка и статус по сезону.</p>
+            </div>
+          </div>
+          <p class="premium-squad-report-hint" id="premium-squad-report-hint">
+            Форма 0.00–10.00: минуты, регулярность старта, FotMob и TS. Цена — кредиты с аукциона этой лиги. Статус: короткий бейдж (травма / дисквал / сомнителен / OUT), подсказка по наведению.
+          </p>
+          <div class="table-wrap premium-squad-report-wrap">
+            <table class="data-table compact-table premium-squad-report-table">
+              <thead>
+                <tr>
+                  <th class="premium-squad-player">Игрок</th>
+                  <th class="premium-squad-pos">Поз</th>
+                  <th class="premium-squad-num sortable" data-squad-sort="auctionPrice" aria-sort="none">Цена</th>
+                  <th>Мин</th>
+                  <th class="sortable" data-squad-sort="ratingAvg" aria-sort="none">FM</th>
+                  <th class="sortable" data-squad-sort="mantraTsAvg" aria-sort="none">TS</th>
+                  <th class="premium-squad-num sortable" data-squad-sort="formScore" aria-sort="none">Форма</th>
+                  <th></th>
+                  <th>↕</th>
+                </tr>
+              </thead>
+              <tbody id="premium-squad-report-body">
+                <tr><td colspan="9" class="live-empty">Выбери команду</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section class="premium-squad-report" id="premium-unpicked-tops" hidden>
+          <div class="premium-selection-head">
+            <div>
+              <h2>Топ-5 свободных</h2>
+              <p class="meta" id="premium-unpicked-tops-meta">Выбери команду — лучшие невзятые по позициям.</p>
+            </div>
+          </div>
+          <p class="premium-squad-report-hint" id="premium-unpicked-tops-hint">
+            Игроки, которых никто не взял в этой лиге. Оценка 0.00–10.00: минуты, регулярность старта, FotMob и TS.
+          </p>
+          <div id="premium-unpicked-tops-body"></div>
+        </section>
         <div class="table-wrap">
           <table class="data-table premium-table">
             <thead>
               <tr>
                 <th class="premium-select-col"><span class="sr-only">Выбор</span></th>
                 <th>Pos</th>
+                <th aria-sort="none">
+                  <button type="button" class="premium-sort-button"
+                    data-premium-sort="xiScore" data-sort-label="Оценка"
+                    aria-label="Оценка: сортировать по убыванию">
+                    Оценка <span class="premium-sort-indicator" aria-hidden="true"></span>
+                  </button>
+                </th>
                 <th>Игрок</th>
                 <th>Клуб</th>
                 <th>Expected 11</th>
@@ -878,7 +1116,92 @@
       </section>
 <!--/spa-view:league-one-->
 
-      
+<!--spa-view:mantra-doma-->
+<section id="view-mantra-doma" class="view" hidden>
+        <div class="toolbar wrap">
+          <div>
+            <h2>Mantra Дома</h2>
+            <p class="meta" id="mantra-doma-meta">Загрузка…</p>
+          </div>
+          <div class="mantra-doma-actions">
+            <button type="button" class="col-picker-btn" id="mantra-doma-apply">Заявиться</button>
+            <button type="button" class="col-picker-btn" id="mantra-doma-refresh">Обновить</button>
+          </div>
+        </div>
+        <div class="live-round-tabs" id="mantra-doma-subtabs" role="tablist" aria-label="Mantra Дома">
+          <button type="button" class="tab" data-mantra-doma-tab="players" aria-selected="true">Игроки</button>
+          <button type="button" class="tab" data-mantra-doma-tab="applicants" aria-selected="false">Заявившиеся</button>
+        </div>
+
+        <div id="mantra-doma-panel-players">
+          <div class="toolbar wrap mantra-doma-filters">
+            <label>
+              Поиск
+              <input type="search" id="mantra-doma-search" placeholder="Игрок или клуб" autocomplete="off" />
+            </label>
+            <label>
+              Клуб
+              <select id="mantra-doma-club"><option value="">Все клубы</option></select>
+            </label>
+            <label>
+              Позиция
+              <select id="mantra-doma-pos"><option value="">Все позиции</option></select>
+            </label>
+            <div class="mantra-doma-view-field">
+              <span id="mantra-doma-view-label">Вид</span>
+              <div class="mantra-doma-view-toggle" id="mantra-doma-view" role="radiogroup" aria-labelledby="mantra-doma-view-label">
+                <button type="button" class="mantra-doma-view-btn" data-mantra-doma-view="tiles" role="radio" aria-checked="true" aria-pressed="true" tabindex="0">Плитки</button>
+                <button type="button" class="mantra-doma-view-btn" data-mantra-doma-view="list" role="radio" aria-checked="false" aria-pressed="false" tabindex="-1">Список</button>
+              </div>
+            </div>
+          </div>
+          <div class="mantra-doma-grid" id="mantra-doma-grid"></div>
+        </div>
+
+        <div id="mantra-doma-panel-applicants" hidden>
+          <p class="meta" id="mantra-doma-applicants-meta">Загрузка…</p>
+          <div id="mantra-doma-applicants"></div>
+        </div>
+
+        <dialog id="mantra-doma-apply-dialog" class="mantra-doma-apply-dialog">
+          <form method="dialog" class="dialog-head">
+            <div class="dialog-title">
+              <h2>Заявка на Mantra Дома</h2>
+              <p class="meta">Нужен вход через Google. Можно выбрать оба типа аукциона.</p>
+            </div>
+            <button type="submit" class="close-btn" aria-label="Закрыть">×</button>
+          </form>
+          <form id="mantra-doma-apply-form" class="mantra-doma-apply-form">
+            <label>
+              Название команды
+              <input type="text" id="mantra-doma-team-name" maxlength="80" required placeholder="Например: Panenka United" autocomplete="organization" />
+            </label>
+            <fieldset class="mantra-doma-auction-prefs">
+              <legend>Тип аукциона</legend>
+              <p class="meta">Можно выбрать один или оба варианта.</p>
+              <label class="check-row">
+                <input type="checkbox" id="mantra-doma-want-regular" />
+                Хочу обычный аукцион у себя в лиге
+              </label>
+              <label class="check-row">
+                <input type="checkbox" id="mantra-doma-want-live" />
+                Хочу живой аукцион у себя в лиге
+              </label>
+            </fieldset>
+            <p class="account-message" id="mantra-doma-apply-status" role="status"></p>
+            <div class="mantra-doma-apply-actions">
+              <button type="submit" class="col-picker-btn">Отправить заявку</button>
+            </div>
+          </form>
+        </dialog>
+        <dialog id="mantra-doma-photo-dialog" class="mantra-doma-photo-dialog" aria-label="Фото игрока">
+          <form method="dialog" class="mantra-doma-photo-dialog-bar">
+            <button type="submit" class="close-btn" aria-label="Закрыть">×</button>
+          </form>
+          <img id="mantra-doma-photo-full" alt="" />
+        </dialog>
+</section>
+<!--/spa-view:mantra-doma-->
 
 <!--spa-view:builder-->
 <section id="view-builder" class="view" hidden>
@@ -895,6 +1218,15 @@
             Команда
             <select id="builder-team"><option value="">Выбери…</option></select>
           </label>
+          <button
+            type="button"
+            class="col-picker-btn"
+            id="builder-refresh-auctions"
+            hidden
+            title="Обновить статус после рассчитанных раундов аукциона"
+          >
+            Обновить после раундов аукциона
+          </button>
           <label class="builder-my-teams">
             <input type="checkbox" id="builder-my-teams" />
             Только мои команды
@@ -1216,20 +1548,6 @@
       </div>
     </dialog>
 
-    <dialog id="ideal-vs-real-dialog" class="ideal-vs-real-dialog">
-      <form method="dialog" class="dialog-head">
-        <div class="dialog-title">
-          <div>
-            <h2 id="ideal-vs-real-title">Ideal vs Real</h2>
-            <p class="meta" id="ideal-vs-real-meta"></p>
-          </div>
-        </div>
-        <button type="submit" class="ghost" aria-label="Закрыть">✕</button>
-      </form>
-      <div class="ideal-vs-real-sum" id="ideal-vs-real-sum"></div>
-      <div class="ideal-vs-real-cols" id="ideal-vs-real-body"></div>
-    </dialog>
-
     <dialog id="mantra-dialog">
       <form method="dialog" class="dialog-head">
         <div class="dialog-title">
@@ -1243,8 +1561,23 @@
       <div class="mantra-dialog-score" id="mantra-dialog-score"></div>
       <div class="mantra-dialog-cols" id="mantra-dialog-body"></div>
     </dialog>
+<!--/spa-dialog:live-->
 
-    <!--/spa-dialog:live-->
+<!--spa-dialog:ideal-vs-real-->
+    <dialog id="ideal-vs-real-dialog" class="ideal-vs-real-dialog">
+      <form method="dialog" class="dialog-head">
+        <div class="dialog-title">
+          <div>
+            <h2 id="ideal-vs-real-title">Ideal vs Real</h2>
+            <p class="meta" id="ideal-vs-real-meta"></p>
+          </div>
+        </div>
+        <button type="submit" class="ghost" aria-label="Закрыть">✕</button>
+      </form>
+      <div class="ideal-vs-real-sum" id="ideal-vs-real-sum"></div>
+      <div class="ideal-vs-real-cols" id="ideal-vs-real-body"></div>
+    </dialog>
+<!--/spa-dialog:ideal-vs-real-->
 <p class="status" id="status">Загрузка…</p>
     <div
       id="content-loading"
@@ -1258,6 +1591,6 @@
       <div class="content-loading-spinner" aria-hidden="true"></div>
       <span class="content-loading-label">Загрузка…</span>
     </div>
-    <script src="/boot.js?v=27" type="module"></script>
+    <script src="/boot.js?v=77" type="module"></script>
   </body>
 </html>

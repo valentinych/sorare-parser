@@ -32,7 +32,9 @@ test("composed menu pages keep one view and boot.js, not the monolith", async ()
   assert.doesNotMatch(live, /id="view-auctions"/);
   assert.doesNotMatch(live, /id="view-sorare"/);
   assert.doesNotMatch(live, /id="view-xi"/);
-  assert.match(live, /boot\.js\?v=27/);
+  assert.match(live, /boot\.js\?v=77/);
+  assert.match(live, /id="ideal-vs-real-dialog"/);
+  assert.match(live, /id="dream-team-dialog"/);
   assert.doesNotMatch(live, /app\.js\?v=/);
   assert.match(live, /href="\/live"/);
   assert.match(live, /data-view="live"[^>]*aria-selected="true"/);
@@ -44,6 +46,12 @@ test("composed menu pages keep one view and boot.js, not the monolith", async ()
   assert.match(auctions, /id="status" hidden/);
   assert.doesNotMatch(auctions, /id="status">Загрузка/);
 
+  const tables = composeSpaPage(html, "tables");
+  assert.match(tables, /id="view-tables"/);
+  assert.match(tables, /data-page="tables"/);
+  assert.doesNotMatch(tables, /id="view-auctions"/);
+  assert.doesNotMatch(tables, /id="league"/);
+
   const clubs = composeSpaPage(html, "clubs");
   assert.match(clubs, /id="view-clubs"/);
   assert.match(clubs, /id="league"/);
@@ -53,7 +61,35 @@ test("composed menu pages keep one view and boot.js, not the monolith", async ()
   assert.doesNotMatch(html, /data-view="matches"/);
   assert.doesNotMatch(html, /data-view="ref"/);
   assert.match(html, /data-view="live"/);
+  assert.match(html, /data-view="tables"/);
   assert.match(html, /data-view="xi"/);
+});
+
+test("gated SPA pages share boot.js core.js module instance", async () => {
+  const boot = await readFile(new URL("../../public-tm/boot.js", import.meta.url), "utf8");
+  const version = boot.match(/from "\.\/core\.js\?v=(\d+)"/)?.[1];
+  assert.ok(version, "boot.js must import cache-busted core.js");
+  const pages = [
+    "live.js",
+    "premium.js",
+    "expected11.js",
+    "league-one.js",
+    "mantra-doma.js",
+    "tables.js",
+  ];
+  for (const file of pages) {
+    const src = await readFile(
+      new URL(`../../public-tm/pages/${file}`, import.meta.url),
+      "utf8",
+    );
+    assert.match(
+      src,
+      new RegExp(`from ["']\\.\\./core\\.js\\?v=${version}["']`),
+      `${file} must import the same core.js as boot.js so accountState is shared`,
+    );
+  }
+  assert.match(boot, /premium: "\.\/pages\/premium\.js\?v=\d+"/);
+  assert.match(boot, /tables: "\.\/pages\/tables\.js\?v=\d+"/);
 });
 
 test("feature page modules do not pull unrelated bundles", async () => {
@@ -70,7 +106,7 @@ test("feature page modules do not pull unrelated bundles", async () => {
   assert.match(appJs, /xi-season"\)\?\.addEventListener/);
   assert.match(appJs, /builder-my-teams[\s\S]{0,80}if \(myTeams\)/);
   assert.match(appJs, /const MANTRA_POS_COLOR = \{/);
-  assert.match(boot, /builder: "\.\/app\.js\?v=145"/);
+  assert.match(boot, /builder: "\.\/app\.js\?v=148"/);
   assert.doesNotMatch(live, /auctions-view/);
   assert.doesNotMatch(live, /app\.js/);
   assert.doesNotMatch(live, /expected11-view/);
@@ -86,7 +122,7 @@ test("GET /auctions and GET / serve HTML without app.js", async (t) => {
   t.after(() => app.close());
   const home = await app.inject({ method: "GET", url: "/" });
   assert.equal(home.statusCode, 200);
-  assert.match(home.body, /boot\.js\?v=27/);
+  assert.match(home.body, /boot\.js\?v=77/);
   assert.doesNotMatch(home.body, /app\.js\?v=/);
   assert.match(home.body, /id="view-clubs"/);
   const auctions = await app.inject({ method: "GET", url: "/auctions" });
@@ -97,6 +133,6 @@ test("GET /auctions and GET / serve HTML without app.js", async (t) => {
   assert.equal(builder.statusCode, 200);
   assert.match(builder.body, /data-page="builder"/);
   assert.match(builder.body, /id="view-builder"/);
-  assert.match(builder.body, /boot\.js\?v=27/);
+  assert.match(builder.body, /boot\.js\?v=77/);
   assert.doesNotMatch(builder.body, /app\.js\?v=/);
 });

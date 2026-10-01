@@ -1,7 +1,13 @@
 import type Database from "better-sqlite3";
 import { config } from "../config.js";
 import { getDb } from "../db/index.js";
-import { AF_LEAGUES, isUiLeagueSlug, leagueBySlug, uiLeagues, type AfLeagueDef } from "../lib/afLeagues.js";
+import {
+  AF_LEAGUES,
+  isPremiumLeagueSlug,
+  leagueBySlug,
+  uiLeagues,
+  type AfLeagueDef,
+} from "../lib/afLeagues.js";
 import {
   getComputed,
   invalidateComputed,
@@ -17,7 +23,6 @@ import { withStartingXiFallbackPercentage } from "./expected11.js";
 import { getExpected11IngestView, listExpected11Leagues } from "./expected11Ingest.js";
 import {
   expected11ProfilePlayerId,
-  getExpected11View,
   relinkUnmatchedExpected11Teams,
   resolveExpected11Player,
 } from "./expected11Import.js";
@@ -78,6 +83,87 @@ function parseNumberArray(value: string | null): number[] {
   } catch {
     return [];
   }
+}
+
+/** Football season start (1 July UTC) from a wall-clock instant. */
+export function seasonStartIso(now: Date): string {
+  const year = now.getUTCFullYear();
+  const seasonYear = now.getUTCMonth() >= 6 ? year : year - 1;
+  return `${seasonYear}-07-01`;
+}
+
+function tableExists(database: Database.Database, name: string): boolean {
+  return Boolean(
+    database
+      .prepare(
+        `SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = ?`,
+      )
+      .get(name),
+  );
+}
+
+function mean(values: number[]): number | null {
+  if (!values.length) return null;
+  return Number(
+    (values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1),
+  );
+}
+
+/** FotMob appearance ratings: season mean (this season) and last 5 finished games. */
+export function loadFotmobRatingAvgs(
+  database: Database.Database,
+  fotmobIds: number[],
+  now: Date,
+): Map<number, { seasonAvg: number | null; last5Avg: number | null }> {
+  const out = new Map<number, { seasonAvg: number | null; last5Avg: number | null }>();
+  const ids = [...new Set(fotmobIds.filter((id) => Number.isSafeInteger(id) && id > 0))];
+  if (
+    !ids.length ||
+    !tableExists(database, "fotmob_match_players") ||
+    !tableExists(database, "fotmob_matches")
+  ) {
+    return out;
+  }
+  const start = seasonStartIso(now);
+  const rows = database
+    .prepare(
+      `SELECT p.player_id AS playerId, m.kickoff AS kickoff, p.rating AS rating
+       FROM fotmob_match_players p
+       JOIN fotmob_matches m ON m.id = p.match_id
+       WHERE p.player_id IN (${ids.map(() => "?").join(",")})
+         AND p.rating IS NOT NULL
+         AND (m.phase IS NULL OR m.phase = 'finished')
+       ORDER BY p.player_id, m.kickoff DESC`,
+    )
+    .all(...ids) as Array<{
+    playerId: number;
+    kickoff: string | null;
+    rating: number | null;
+  }>;
+  const last5 = new Map<number, number[]>();
+  const season = new Map<number, number[]>();
+  for (const row of rows) {
+    const rating = Number(row.rating);
+    if (!Number.isFinite(rating)) continue;
+    const recent = last5.get(row.playerId) ?? [];
+    if (recent.length < 5) {
+      recent.push(rating);
+      last5.set(row.playerId, recent);
+    }
+    const kick = row.kickoff ?? "";
+    if (kick >= start) {
+      const seasonRatings = season.get(row.playerId) ?? [];
+      seasonRatings.push(rating);
+      season.set(row.playerId, seasonRatings);
+    }
+  }
+  for (const id of ids) {
+    const seasonAvg = mean(season.get(id) ?? []);
+    const last5Avg = mean(last5.get(id) ?? []);
+    if (seasonAvg == null && last5Avg == null) continue;
+    out.set(id, { seasonAvg, last5Avg });
+  }
+  return out;
 }
 
 function fullName(row: {
@@ -294,12 +380,22 @@ export function removeExpected11ManualMapping(
       }),
     };
   })();
-  relinkFootmopsFromManualMappings(database, {
-    mantraClubId: input.mantraClubId,
-    sourceKey,
-  });
+    relinkFootmopsFromManualMappings(database, {
+      mantraClubId: input.mantraClubId,
+      sourceKey,
+    });
+    invalidatePremiumOddsJoinCache(database);
+    return result;
+}
+
+/** After a live Mantra club-name ingest, retry unmatched Expected11 / footmops links. */
+export function relinkPremiumSquadMappings(
+  database: Database.Database = getDb(),
+) {
+  const teams = relinkUnmatchedExpected11Teams(database);
+  const footmops = relinkFootmopsFromManualMappings(database);
   invalidatePremiumOddsJoinCache(database);
-  return result;
+  return { teams, footmops };
 }
 
 export function getExpected11MappingView(
@@ -553,6 +649,8 @@ export type FixtureRow = {
   bookmaker: string | null;
   home_cs_prob: number | null;
   away_cs_prob: number | null;
+  home_score_prob: number | null;
+  away_score_prob: number | null;
   popular_score: string | null;
 };
 
@@ -693,7 +791,7 @@ function premiumOddsCacheVersion(
       .prepare(`SELECT MAX(extracted_at) AS extractedAt FROM expected11_matches`)
       .get() as { extractedAt: string | null } | undefined
   )?.extractedAt;
-  return `rounds:${rounds}|ttl:${bucket}|e11:${extractedAt ?? ""}|fm:${footmopsSnapshotVersion(database)}`;
+  return `rounds:${rounds}|ttl:${bucket}|e11:${extractedAt ?? ""}|fm:${footmopsSnapshotVersion(database)}|xi:1`;
 }
 
 function sortByKickoff(fixtures: FixtureRow[]): FixtureRow[] {
@@ -731,6 +829,11 @@ function clubFixture(
 
 const CLUB_ALIASES: Record<string, string> = {
   "ac milan": "milan",
+  "fc internazionale": "inter",
+  "fc internazionale milano": "inter",
+  internazionale: "inter",
+  "internazionale milano": "inter",
+  "inter milan": "inter",
   "afc bournemouth": "bournemouth",
   "bolton wanderers": "bolton",
   "brighton hove albion": "brighton",
@@ -792,8 +895,8 @@ export function fixtureForMatch(
         clubMatches(match.awayTeam, fixture.away_name),
     ),
   );
-  const unfinished = matching.filter(
-    (fixture) => !FINISHED_STATUSES.has((fixture.status || "").toUpperCase()),
+  const unfinished = matching.filter((fixture) =>
+    fixtureStillOpen(fixture.status, fixture.kickoff ?? null, nowMs),
   );
   const future = unfinished.find(
     (fixture) => (Date.parse(fixture.kickoff ?? "") || 0) > nowMs,
@@ -914,7 +1017,19 @@ function expected11ByPlayer(
       const want = nextRoundByLeague.get(fixture.league_id);
       return want != null && parseAfRoundNum(fixture.round) === want;
     });
-    const future = (inNextRound.length ? inNextRound : withFixture).sort(
+    const nextRoundKnown = withFixture.some((rows) => {
+      const fixture = matchContext.get(rows[0]!.match_id)?.fixture;
+      return (
+        fixture?.league_id != null &&
+        nextRoundByLeague.get(fixture.league_id) != null
+      );
+    });
+    const pool = inNextRound.length
+      ? inNextRound
+      : nextRoundKnown
+        ? []
+        : withFixture;
+    const future = pool.sort(
       (a, b) => {
         const aKickoff =
           Date.parse(matchContext.get(a[0]!.match_id)?.fixture?.kickoff ?? "") ||
@@ -1097,7 +1212,7 @@ function loadPremiumFixtures(database: Database.Database): FixtureRow[] {
                  AND (st.league_id = f.league_id OR st.league_id IS NULL)
                LIMIT 1) AS away_name,
               o.home_odd, o.draw_odd, o.away_odd, o.bookmaker,
-              o.home_cs_prob, o.away_cs_prob, o.popular_score
+              o.home_cs_prob, o.away_cs_prob, o.home_score_prob, o.away_score_prob, o.popular_score
        FROM fixtures f
        LEFT JOIN fixture_odds o ON o.fixture_id = f.id
        WHERE f.date IS NOT NULL`,
@@ -1105,15 +1220,36 @@ function loadPremiumFixtures(database: Database.Database): FixtureRow[] {
     .all() as FixtureRow[];
 }
 
+function cheapExpected11Aggregate(database: Database.Database) {
+  const matches = (
+    database
+      .prepare(`SELECT COUNT(*) AS n FROM expected11_matches`)
+      .get() as { n: number } | undefined
+  )?.n;
+  return {
+    matches: matches ?? 0,
+    teams: 0,
+    clubs: 0,
+    linked: 0,
+    unmatched: 0,
+    ambiguous: 0,
+  };
+}
+
 function getPremiumOddsJoin(
   database: Database.Database,
   season: number,
   nowMs: number,
+  options: { blockOnMiss?: boolean } = {},
 ): {
   fixtures: FixtureRow[];
   expected11: Map<number, Expected11PlayerHint>;
   rounds: Map<number, number | null>;
 } {
+  // Web (COMPUTE_ENQUEUE=0) must not rebuild the join on GET — it scans every
+  // fixture with correlated season_teams lookups (~40s on prod).
+  const blockOnMiss =
+    options.blockOnMiss ?? process.env.COMPUTE_ENQUEUE !== "0";
   const cached = getComputed<PremiumOddsJoin>(
     PREMIUM_ODDS_CACHE_KEY,
     premiumOddsCacheVersion(database, season, nowMs),
@@ -1140,13 +1276,24 @@ function getPremiumOddsJoin(
         rounds: [...rounds.entries()],
       };
     },
-    { database, serveStale: false },
+    { database, serveStale: true, blockOnMiss },
   ).value;
+  if (!cached) {
+    return { fixtures: [], expected11: new Map(), rounds: new Map() };
+  }
   return {
     fixtures: cached.fixtures,
     expected11: new Map(cached.expected11),
     rounds: new Map(cached.rounds),
   };
+}
+
+/** Compute-worker rebuild. HTTP GET peeks sqlite / stale cache only. */
+export function warmPremiumOddsJoin(
+  database: Database.Database = getDb(),
+  nowMs: number = Date.now(),
+): void {
+  getPremiumOddsJoin(database, config.predictSeason, nowMs, { blockOnMiss: true });
 }
 
 export function getExpected11PremiumView(
@@ -1176,7 +1323,7 @@ export function getExpected11PremiumView(
   const filteredTeams = teamRows.filter((team) => {
     if (options.tournamentId != null) return team.tournament_id === options.tournamentId;
     const league = leagueByTournament(team.tournament_id);
-    return league != null && isUiLeagueSlug(league.slug);
+    return league != null && isPremiumLeagueSlug(league.slug);
   });
   const leagues = Array.from(
     new Map(
@@ -1206,13 +1353,13 @@ export function getExpected11PremiumView(
     clubs: [] as Array<{ id: number; name: string; tournamentId: number | null }>,
     managerIdConfigured: Boolean(managerId),
     selectionLogic:
-      "Составы менеджера — сезонная заявка до кнопки «Обновить состав моей команды». Матч, P(win), CS и счёт — следующий незавершённый тур чемпионата. Expected11 % — из сохранённого разбора этого тура.",
+      "Составы менеджера — сезонная заявка до кнопки «Обновить состав моей команды». Матч, P(win), CS и счёт — следующий незавершённый тур чемпионата. Expected11 % — из сохранённого разбора этого тура. Оценка XI — рейтинг сезона/формы, XI%, P(win/CS/гол); состав подбирается автоматически.",
     gaps: {
       popularScore: false,
       gkCleanSheetDistinct: false,
     },
       counts: { rows: 0, teams: filteredTeams.length, odds: 0, expected11: 0, footmops: 0, cleanSheets: 0 },
-    sourceAggregate: getExpected11View(database).aggregate,
+    sourceAggregate: cheapExpected11Aggregate(database),
     ...mantraFormationsPayload(),
     message,
   });
@@ -1230,7 +1377,7 @@ export function getExpected11PremiumView(
     ? (database
         .prepare(
           `SELECT id, name, first_name, full_name, positions_json, tm_url,
-                  club_id, club_name, tournament_id
+                  club_id, club_name, tournament_id, fotmob_player_id
            FROM mantra_players
            WHERE id IN (${playerIds.map(() => "?").join(",")})`,
         )
@@ -1244,15 +1391,21 @@ export function getExpected11PremiumView(
         club_id: number | null;
         club_name: string | null;
         tournament_id: number | null;
+        fotmob_player_id: number | null;
       }>)
     : [];
   const playerById = new Map(players.map((player) => [player.id, player]));
+  const ratings = loadFotmobRatingAvgs(
+    database,
+    players.flatMap((player) =>
+      player.fotmob_player_id != null ? [player.fotmob_player_id] : [],
+    ),
+    options.now ?? new Date(),
+  );
   const oddsJoin = getPremiumOddsJoin(database, season, nowMs);
   const fixtures = oddsJoin.fixtures;
   const expected11 = oddsJoin.expected11;
   const footmops = footmopsByPlayer(database);
-  const championshipTournamentId =
-    leagueBySlug("championship")?.mantraTournamentId ?? 11;
   const tournamentIds = [
     ...new Set(
       filteredTeams
@@ -1279,11 +1432,7 @@ export function getExpected11PremiumView(
       if (!player) continue;
       const positions = parseStringArray(player.positions_json);
       const hint = expected11.get(player.id);
-      const footmopsHint =
-        team.tournament_id === championshipTournamentId ||
-        player.tournament_id === championshipTournamentId
-          ? footmops.get(player.id)
-          : undefined;
+      const footmopsHint = footmops.get(player.id);
       const fixture =
         leagueId != null && player.club_name
           ? clubFixture(player.club_name, leagueId, round ?? null, fixtures, nowMs)
@@ -1352,7 +1501,18 @@ export function getExpected11PremiumView(
             ? fixture.away_cs_prob
             : fixture.home_cs_prob
           : null,
+        teamScoreProbability: fixture
+          ? isHome
+            ? fixture.home_score_prob ?? null
+            : fixture.away_score_prob ?? null
+          : null,
         popularScore: fixture?.popular_score ?? null,
+        seasonAvgRating: player.fotmob_player_id != null
+          ? ratings.get(player.fotmob_player_id)?.seasonAvg ?? null
+          : null,
+        last5AvgRating: player.fotmob_player_id != null
+          ? ratings.get(player.fotmob_player_id)?.last5Avg ?? null
+          : null,
         bookmaker: probabilities || fixture?.home_cs_prob != null
           ? fixture?.bookmaker ?? null
           : null,
@@ -1391,7 +1551,7 @@ export function getExpected11PremiumView(
     ),
     managerIdConfigured: true,
     selectionLogic:
-      "Составы менеджера — сезонная заявка до кнопки «Обновить состав моей команды». Матч, P(win), CS клуба/соперника и счёт — следующий незавершённый тур чемпионата (1X2, CS Yes/No, Exact Score). Expected11 % — из сохранённого разбора этого тура.",
+      "Составы менеджера — сезонная заявка до кнопки «Обновить состав моей команды». Матч, P(win), CS клуба/соперника и счёт — следующий незавершённый тур чемпионата (1X2, CS Yes/No, Exact Score). Expected11 % — из сохранённого разбора этого тура. Оценка XI — рейтинг сезона/формы, XI%, P(win/CS/гол); состав подбирается автоматически.",
     gaps: {
       popularScore: false,
       gkCleanSheetDistinct: false,
@@ -1401,11 +1561,13 @@ export function getExpected11PremiumView(
       teams: filteredTeams.length,
       odds: resultRows.filter((row) => row.winProbability != null).length,
       expected11: resultRows.filter((row) => row.displayedPercentage != null).length,
-      footmops: resultRows.filter((row) => row.footmopsPercentage != null).length,
+      footmops: resultRows.filter(
+        (row) => row.footmopsPercentage != null || row.footmopsGroup === "out",
+      ).length,
       cleanSheets: resultRows.filter((row) => row.cleanSheetProbability != null)
         .length,
     },
-    sourceAggregate: getExpected11View(database).aggregate,
+    sourceAggregate: cheapExpected11Aggregate(database),
     ...mantraFormationsPayload(),
     message: resultRows.length
       ? null

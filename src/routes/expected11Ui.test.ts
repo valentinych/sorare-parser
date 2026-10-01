@@ -172,20 +172,65 @@ test("private Expected11 tabs start hidden and depend on account entitlement", a
     html,
     /data-view="premium"[^>]*hidden/,
   );
-  assert.match(
-    html,
-    /data-view="league-one"[^>]*hidden/,
-  );
   assert.match(app, /accountState\.entitlements\?\.expected11Premium/);
   assert.match(app, /accountState\.entitlements\?\.expected11Admin/);
   assert.match(core, /tab\[data-view="premium"\]/);
   assert.match(core, /tab\[data-view="mapping"\]/);
-  assert.match(core, /tab\[data-view="league-one"\]/);
   assert.match(core, /expected11Admin/);
   assert.doesNotMatch(app, /name === "mapping" \|\| name === "premium"/);
   assert.match(app, /name === "premium" && !accountState\.entitlements\?\.expected11Premium/);
   assert.match(app, /name === "mapping" && !accountState\.entitlements\?\.expected11Admin/);
-  assert.match(app, /name === "league-one" && !accountState\.entitlements\?\.expected11Admin/);
+});
+
+test("League One and Mantra Doma are public tabs with anonymous GETs", async () => {
+  const [html, app, core, boot, leagueOnePage, mantraDomaPage, leagueOneRoutes, mantraDomaRoutes] =
+    await Promise.all([
+      readFile(new URL("../../public-tm/index.html", import.meta.url), "utf8"),
+      readFile(new URL("../../public-tm/app.js", import.meta.url), "utf8"),
+      readFile(new URL("../../public-tm/core.js", import.meta.url), "utf8"),
+      readFile(new URL("../../public-tm/boot.js", import.meta.url), "utf8"),
+      readFile(new URL("../../public-tm/pages/league-one.js", import.meta.url), "utf8"),
+      readFile(new URL("../../public-tm/pages/mantra-doma.js", import.meta.url), "utf8"),
+      readFile(new URL("./leagueOne.ts", import.meta.url), "utf8"),
+      readFile(new URL("./mantraDoma.ts", import.meta.url), "utf8"),
+    ]);
+  assert.match(html, /data-view="league-one" href="\/league-one"/);
+  assert.match(html, /data-view="mantra-doma" href="\/mantra-doma"/);
+  assert.doesNotMatch(html, /data-view="league-one"[^>]*hidden/);
+  assert.doesNotMatch(html, /data-view="mantra-doma"[^>]*hidden/);
+  assert.doesNotMatch(core, /tab\[data-view="league-one"\]/);
+  assert.doesNotMatch(core, /tab\[data-view="mantra-doma"\]/);
+  assert.doesNotMatch(app, /tab\[data-view="league-one"\]/);
+  assert.doesNotMatch(app, /tab\[data-view="mantra-doma"\]/);
+  assert.doesNotMatch(app, /name === "league-one"/);
+  assert.doesNotMatch(app, /name === "mantra-doma"/);
+  assert.doesNotMatch(leagueOnePage, /location\.replace\("\/clubs"\)/);
+  assert.doesNotMatch(mantraDomaPage, /renderLoginGate/);
+  assert.doesNotMatch(mantraDomaPage, /mantra-doma-login-gate/);
+  assert.doesNotMatch(mantraDomaPage, /playerCell/);
+  assert.match(mantraDomaPage, /\/api\/mantra-doma\/stats/);
+  assert.match(html, /id="mantra-doma-photo-dialog"/);
+  assert.match(boot, /"league-one": "\.\/pages\/league-one\.js\?v=14"/);
+  assert.match(boot, /"mantra-doma": "\.\/pages\/mantra-doma\.js\?v=9"/);
+  assert.match(mantraDomaPage, /mantra-doma-table/);
+  assert.match(mantraDomaPage, /nextToggleSort/);
+  assert.match(mantraDomaPage, /data-doma-sort/);
+  assert.match(mantraDomaPage, /title="\$\{esc\(title\)\}"/);
+  assert.match(leagueOneRoutes, /app\.get\("\/api\/league-one", async \(\) => \{/);
+  assert.match(leagueOneRoutes, /app\.get\("\/api\/league-one\/reports", async \(\) => \{/);
+  assert.doesNotMatch(
+    leagueOneRoutes,
+    /app\.get\("\/api\/league-one",[\s\S]{0,180}authorizeAdmin/,
+  );
+  assert.match(leagueOneRoutes, /app\.post\("\/api\/league-one\/sync"[\s\S]*authorizeAdmin/);
+  assert.match(mantraDomaRoutes, /app\.get\("\/api\/mantra-doma", async \(\) => \{/);
+  assert.match(mantraDomaRoutes, /app\.get\("\/api\/mantra-doma\/stats", async \(\) => \{/);
+  assert.doesNotMatch(
+    mantraDomaRoutes,
+    /app\.get\("\/api\/mantra-doma\/stats"[\s\S]{0,180}requireUser/,
+  );
+  assert.match(mantraDomaRoutes, /currentUser\(request\)/);
+  assert.match(mantraDomaRoutes, /app\.post\("\/api\/mantra-doma\/applications"[\s\S]*requireUser/);
 });
 
 test("mapping page filters loaded rows by championship without refetching", async () => {
@@ -209,7 +254,7 @@ test("mapping page filters loaded rows by championship without refetching", asyn
     page,
     /applyLinkedMapping[\s\S]{0,400}loadMapping\(\)/,
   );
-  assert.match(boot, /expected11\.js\?v=12/);
+  assert.match(boot, /expected11\.js\?v=14/);
 });
 
 test("Sorare championship dropdown reads and writes ?league= slugs", async () => {
@@ -229,7 +274,7 @@ test("Sorare championship dropdown reads and writes ?league= slugs", async () =>
   assert.match(page, /qs\.get\("league"\)/);
   assert.match(page, /qs\.get\("tour"\) \|\| qs\.get\("round"\)/);
   assert.match(page, /renderExpected11Gazette\(data\)/);
-  assert.match(boot, /sorare: "\.\/pages\/expected11\.js\?v=12"/);
+  assert.match(boot, /sorare: "\.\/pages\/expected11\.js\?v=14"/);
 });
 
 test("Expected11 URL ingest form is admin-only and not in anonymous HTML", async () => {
@@ -258,7 +303,8 @@ test("Expected11 URL ingest form is admin-only and not in anonymous HTML", async
 });
 
 test("Premium metric sorting is numeric, null-last, stable, and filter-compatible", async () => {
-  const { nextPremiumSort, sortPremiumRows } = await import(premiumHelperPath);
+  const { nextPremiumSort, nextToggleSort, sortNumericRows, sortPremiumRows } =
+    await import(premiumHelperPath);
   const rows = [
     {
       mantraPlayerId: 1,
@@ -373,6 +419,65 @@ test("Premium metric sorting is numeric, null-last, stable, and filter-compatibl
     ),
     { key: "displayedPercentage", dir: "desc" },
   );
+
+  const squadRows = [
+    {
+      mantraPlayerId: 1,
+      clubName: "Alpha",
+      position: "ST",
+      surname: "High",
+      displayName: "High",
+      ratingAvg: 8.1,
+      mantraTsAvg: 6.2,
+      formScore: 9.1,
+      auctionPrice: 12,
+    },
+    {
+      mantraPlayerId: 2,
+      clubName: "Alpha",
+      position: "GK",
+      surname: "Gap",
+      displayName: "Gap",
+      ratingAvg: null,
+      mantraTsAvg: null,
+      formScore: 0,
+      auctionPrice: null,
+    },
+    {
+      mantraPlayerId: 3,
+      clubName: "Beta",
+      position: "CM",
+      surname: "Mid",
+      displayName: "Mid",
+      ratingAvg: 6.4,
+      mantraTsAvg: 7.5,
+      formScore: 5,
+      auctionPrice: 3,
+    },
+  ];
+  assert.deepEqual(
+    sortNumericRows(squadRows, { key: "formScore", dir: "desc" }).map(
+      (row: { mantraPlayerId: number }) => row.mantraPlayerId,
+    ),
+    [1, 3, 2],
+  );
+  assert.deepEqual(
+    sortNumericRows(squadRows, { key: "auctionPrice", dir: "desc" }).map(
+      (row: { mantraPlayerId: number }) => row.mantraPlayerId,
+    ),
+    [1, 3, 2],
+  );
+  assert.deepEqual(
+    sortNumericRows(squadRows, { key: "ratingAvg", dir: "asc" }).map(
+      (row: { mantraPlayerId: number }) => row.mantraPlayerId,
+    ),
+    [3, 1, 2],
+  );
+  assert.deepEqual(nextToggleSort(null, "formScore"), { key: "formScore", dir: "desc" });
+  assert.deepEqual(
+    nextToggleSort({ key: "formScore", dir: "desc" }, "formScore"),
+    { key: "formScore", dir: "asc" },
+  );
 });
 
 test("Premium sort controls expose direction and load cache-busted assets", async () => {
@@ -381,6 +486,8 @@ test("Premium sort controls expose direction and load cache-busted assets", asyn
     readFile(new URL("../../public-tm/pages/premium.js", import.meta.url), "utf8"),
     readFile(new URL("../../public-tm/pages/expected11.js", import.meta.url), "utf8"),
   ]);
+  assert.match(html, /data-premium-sort="xiScore"/);
+  assert.match(html, /data-sort-label="Оценка"/);
   assert.match(html, /data-premium-sort="displayedPercentage"/);
   assert.match(html, /data-premium-sort="footmopsPercentage"/);
   assert.match(html, /data-sort-label="футмопс"/);
@@ -388,24 +495,82 @@ test("Premium sort controls expose direction and load cache-busted assets", asyn
   assert.match(html, /data-premium-sort="cleanSheetProbability"/);
   assert.match(html, /data-premium-sort="opponentCleanSheetProbability"/);
   assert.match(html, /aria-sort="none"/);
-  assert.match(html, /boot\.js\?v=27/);
+  assert.match(html, /boot\.js\?v=77/);
   assert.match(html, /Обновить состав моей команды/);
-  assert.match(html, /styles\.css\?v=131/);
+  assert.match(html, /id="premium-refresh-auctions"/);
+  assert.match(html, /Обновить после раундов аукциона/);
+  assert.match(html, /id="premium-refresh-auctions"[\s\S]*?\bhidden\b/);
+  assert.match(html, /styles\.css\?v=163/);
   assert.match(html, /id="premium-generate"/);
   assert.match(html, /Сгенерировать состав/);
+  assert.match(html, /id="premium-squad-report"/);
+  assert.match(html, /Отчёт по составу/);
+  assert.match(html, />Цена</);
+  assert.match(html, />Форма</);
+  assert.match(html, /data-squad-sort="auctionPrice"/);
+  assert.match(html, /data-squad-sort="ratingAvg"/);
+  assert.match(html, /data-squad-sort="mantraTsAvg"/);
+  assert.match(html, /data-squad-sort="formScore"/);
+  assert.match(html, /id="premium-unpicked-tops"/);
+  assert.match(html, /Топ-5 свободных/);
+  assert.match(html, /premium-squad-pos/);
+  assert.match(html, />Поз</);
+  assert.match(premium, /function squadPlayerCell/);
+  assert.match(premium, /function mantraPosPill/);
+  assert.match(premium, /MANTRA_POS_COLOR/);
+  assert.match(premium, /mantra-pos-pill/);
+  assert.match(premium, /premium-squad-pos/);
+  assert.doesNotMatch(premium, /function playerCell[\s\S]*function playerCell/);
   assert.match(html, /premium-select-col/);
   assert.match(html, /id="premium-team"/);
   assert.doesNotMatch(html, /id="premium-league"/);
   assert.doesNotMatch(html, /id="premium-club"/);
-  assert.match(premium, /core\.js\?v=7/);
-  assert.match(premium, /premium-sort\.js\?v=3/);
+  assert.match(premium, /function formatXiPct/);
+  assert.match(premium, /formatXiPct\(row\.displayedPercentage\)/);
+  assert.match(premium, /core\.js\?v=11/);
+  assert.match(premium, /premium-sort\.js\?v=5/);
   assert.match(premium, /footmopsPercentage/);
-  assert.match(premium, /premium-formations\.js\?v=1/);
+  assert.match(premium, /footmopsGroup === "out"/);
+  assert.match(premium, /return "OUT"/);
+  assert.match(premium, /premium-formations\.js\?v=4/);
+  assert.match(premium, /Скамейка/);
+  assert.match(premium, /Вне заявки/);
+  assert.match(premium, /premium-row-bench/);
   assert.match(premium, /mantraPositionsText\(row\)/);
   assert.match(premium, /premium-player-select/);
-  assert.match(premium, /generatePremiumLineups/);
+  assert.match(premium, /pickBestPremiumXi/);
+  assert.match(premium, /applyBestXi/);
   assert.match(premium, /\/api\/expected11\/premium\/refresh/);
+  assert.match(premium, /\/api\/expected11\/premium\/refresh-auctions/);
+  assert.match(premium, /\/api\/expected11\/premium\/squad-report/);
+  assert.match(premium, /\/api\/expected11\/premium\/unpicked-tops/);
+  assert.match(premium, /showSquadReport/);
+  assert.match(premium, /loadUnpickedTops/);
+  assert.match(premium, /function squadPlayerCell/);
+  assert.match(premium, /reportLoadError/);
+  assert.match(premium, /minutesGrid/);
+  assert.match(premium, /statusBadge/);
+  assert.match(premium, /premium-squad-grid/);
+  assert.match(premium, /function formScoreHeat/);
+  assert.match(premium, /function formScoreCell/);
+  assert.match(premium, /premium-form-heat/);
+  assert.match(premium, /formScoreHeat\(row\.formScore\)/);
+  assert.doesNotMatch(premium, /formScoreHeat\(row\.ratingAvg\)/);
+  assert.match(premium, /data-unpicked-sort/);
+  assert.match(premium, /data-squad-sort/);
+  assert.match(premium, /sortNumericRows/);
+  assert.match(premium, /nextToggleSort/);
+  assert.match(premium, /fetchJson/);
+  assert.match(premium, /loadSquadReport\(refresh\)\.catch/);
+  assert.doesNotMatch(premium, /await loadSquadReport/);
+  assert.doesNotMatch(premium, /await loadUnpickedTops/);
+  assert.match(premium, /loadUnpickedTops\(refresh\)\.catch/);
   assert.match(premium, /method: "POST"/);
+  assert.match(premium, /function isPremiumAdmin/);
+  assert.match(premium, /expected11Admin/);
+  assert.match(premium, /syncAuctionRefreshButton/);
+  assert.match(premium, /aria-busy/);
+  assert.match(premium, /function squadPlayerCell/);
   assert.match(premium, /"aria-sort"/);
   assert.match(premium, /nextPremiumSort\(premiumSort/);
   assert.match(premium, /teamOptionLabel\(team\)/);

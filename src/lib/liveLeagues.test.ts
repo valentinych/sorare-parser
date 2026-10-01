@@ -2,7 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   LIVE_LEAGUES,
+  PREMIUM_EXTRA_LEAGUES,
   allLiveLeagues,
+  allBuilderLeagues,
+  allPremiumLeagues,
+  allTablesLeagues,
+  catalogDivisionsForTournament,
+  isTablesExtraSlug,
+  leagueFlagEmoji,
+  liveLeagueByFotmobId,
   liveLeagueBySlug,
   mantraToursAreLocked,
   mantraToursHaveActiveDeadline,
@@ -25,6 +33,11 @@ test("LIVE_LEAGUES includes the six UI championships", () => {
   ]);
   assert.equal(LIVE_LEAGUES.ekstraklasa?.mantraTournamentId, 18);
   assert.equal(LIVE_LEAGUES.ekstraklasa?.fotmobLeagueId, 196);
+  assert.deepEqual(
+    LIVE_LEAGUES.ekstraklasa?.mantraDivisions.map((d) => d.division),
+    ["A1", "B1", "B2", "C1"],
+  );
+  assert.equal(LIVE_LEAGUES.ekstraklasa?.mantraDivisions[0]?.leagueId, 583);
   assert.equal(LIVE_LEAGUES["serie-a"]?.mantraTournamentId, 1);
   assert.equal(LIVE_LEAGUES["serie-a"]?.fotmobLeagueId, 55);
   assert.equal(LIVE_LEAGUES.bundesliga?.mantraTournamentId, 3);
@@ -33,6 +46,108 @@ test("LIVE_LEAGUES includes the six UI championships", () => {
   assert.equal(LIVE_LEAGUES["premier-league"]?.fotmobLeagueId, 47);
   assert.equal(LIVE_LEAGUES.championship?.mantraTournamentId, 11);
   assert.equal(LIVE_LEAGUES["super-lig"]?.mantraTournamentId, 21);
+});
+
+test("tables extra leagues are wired for /tables but stay off Live poller", () => {
+  assert.deepEqual(allLiveLeagues().map((l) => l.slug), [
+    "ekstraklasa",
+    "serie-a",
+    "bundesliga",
+    "premier-league",
+    "championship",
+    "super-lig",
+  ]);
+  const extra = allTablesLeagues().map((l) => l.slug);
+  assert.deepEqual(extra.slice(6), [
+    "ligue-1",
+    "la-liga",
+    "eredivisie",
+    "jupiler-pro-league",
+    "primeira-liga",
+    "upl",
+    "mls",
+    "brasileirao",
+  ]);
+  assert.equal(LIVE_LEAGUES["ligue-1"], undefined);
+  assert.equal(liveLeagueBySlug("ligue-1")?.mantraTournamentId, 4);
+  assert.equal(liveLeagueBySlug("ligue-1")?.fotmobLeagueId, 53);
+  assert.equal(liveLeagueBySlug("FR1")?.slug, "ligue-1");
+  assert.equal(liveLeagueBySlug("la-liga")?.mantraTournamentId, 5);
+  assert.equal(liveLeagueBySlug("la-liga")?.fotmobLeagueId, 87);
+  assert.equal(liveLeagueBySlug("eredivisie")?.fotmobLeagueId, 57);
+  assert.equal(liveLeagueBySlug("jupiler-pro-league")?.fotmobLeagueId, 40);
+  assert.equal(liveLeagueBySlug("primeira-liga")?.fotmobLeagueId, 61);
+  assert.equal(liveLeagueBySlug("upl")?.mantraTournamentId, 15);
+  assert.equal(liveLeagueBySlug("upl")?.fotmobLeagueId, 441);
+  assert.equal(liveLeagueBySlug("mls")?.mantraTournamentId, 16);
+  assert.equal(liveLeagueBySlug("mls")?.fotmobLeagueId, 130);
+  assert.equal(liveLeagueBySlug("brasileirao")?.mantraTournamentId, 19);
+  assert.equal(liveLeagueBySlug("brasileirao")?.fotmobLeagueId, 268);
+  assert.equal(leagueFlagEmoji("ligue-1"), "🇫🇷");
+  assert.equal(leagueFlagEmoji("championship"), "🏴󠁧󠁢󠁥󠁮󠁧󠁿");
+  assert.equal(liveLeagueBySlug("ligue-1")?.mantraDivisions[0]?.leagueId, 732);
+  assert.equal(liveLeagueBySlug("la-liga")?.mantraDivisions[0]?.leagueId, 664);
+  assert.equal(liveLeagueBySlug("upl")?.mantraDivisions.length, 52);
+  assert.equal(isTablesExtraSlug("ligue-1"), true);
+  assert.equal(isTablesExtraSlug("championship"), false);
+  assert.equal(isTablesExtraSlug("league-one"), false);
+});
+
+test("England 3 is Premium-only, not Live or /tables", () => {
+  assert.equal(LIVE_LEAGUES["league-one"], undefined);
+  assert.equal(allLiveLeagues().some((l) => l.slug === "league-one"), false);
+  assert.equal(allTablesLeagues().some((l) => l.slug === "league-one"), false);
+  assert.equal(PREMIUM_EXTRA_LEAGUES["league-one"]?.mantraTournamentId, 26);
+  assert.equal(liveLeagueBySlug("league-one")?.fotmobLeagueId, 108);
+  assert.equal(liveLeagueBySlug("GB3")?.slug, "league-one");
+  assert.equal(liveLeagueByFotmobId(108)?.slug, "league-one");
+  assert.deepEqual(
+    liveLeagueBySlug("league-one")?.mantraDivisions.map((d) => d.leagueId),
+    [795, 796, 797, 798, 799],
+  );
+  assert.deepEqual(allPremiumLeagues().map((l) => l.slug), [
+    "ekstraklasa",
+    "serie-a",
+    "bundesliga",
+    "premier-league",
+    "championship",
+    "super-lig",
+    "league-one",
+  ]);
+  assert.equal(leagueFlagEmoji("league-one"), "🏴󠁧󠁢󠁥󠁮󠁧󠁿");
+});
+
+test("Builder catalog is Live 6 + /tables extras + League One", () => {
+  assert.deepEqual(allBuilderLeagues().map((l) => l.slug), [
+    "ekstraklasa",
+    "serie-a",
+    "bundesliga",
+    "premier-league",
+    "championship",
+    "super-lig",
+    "ligue-1",
+    "la-liga",
+    "eredivisie",
+    "jupiler-pro-league",
+    "primeira-liga",
+    "upl",
+    "mls",
+    "brasileirao",
+    "league-one",
+  ]);
+  assert.equal(allBuilderLeagues().find((l) => l.slug === "ligue-1")?.mantraTournamentId, 4);
+  assert.equal(allBuilderLeagues().find((l) => l.slug === "league-one")?.mantraTournamentId, 26);
+  assert.equal(allBuilderLeagues().find((l) => l.slug === "championship")?.mantraTournamentId, 11);
+  assert.deepEqual(
+    catalogDivisionsForTournament(4).map((d) => d.id),
+    [732, 733, 734, 735, 736, 737, 738, 739, 740],
+  );
+  assert.deepEqual(
+    catalogDivisionsForTournament(26).map((d) => d.id),
+    [795, 796, 797, 798, 799],
+  );
+  assert.equal(catalogDivisionsForTournament(26)[0]?.name, "Winchester");
+  assert.equal(catalogDivisionsForTournament(99).length, 0);
 });
 
 test("liveLeagueBySlug accepts AF slugs and TM codes", () => {
@@ -46,6 +161,8 @@ test("liveLeagueBySlug accepts AF slugs and TM codes", () => {
   assert.equal(liveLeagueBySlug("L1")?.slug, "bundesliga");
   assert.equal(liveLeagueBySlug("championship")?.slug, "championship");
   assert.equal(liveLeagueBySlug("ekstraklasa")?.slug, "ekstraklasa");
+  assert.equal(liveLeagueBySlug("ES1")?.slug, "la-liga");
+  assert.equal(liveLeagueBySlug("UKR1")?.slug, "upl");
 });
 
 test("resolveLiveLeague no longer maps Premier League onto Ekstraklasa", () => {

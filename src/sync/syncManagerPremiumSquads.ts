@@ -1,18 +1,20 @@
 import type Database from "better-sqlite3";
 import * as mantra from "../clients/mantra.js";
 import { getDb } from "../db/index.js";
-import { uiLeagues } from "../lib/afLeagues.js";
+import { premiumLeagues } from "../lib/afLeagues.js";
 import {
   peekComputedPersisted,
   writeComputed,
 } from "../lib/computedCache.js";
 import { catalogMantraLeagues } from "../lib/mantraLeagueCatalog.js";
-import { allLiveLeagues } from "../lib/liveLeagues.js";
+import { allPremiumLeagues } from "../lib/liveLeagues.js";
 
 export type PremiumSquadsClient = {
   fetchLeagueTeams: typeof mantra.fetchLeagueTeams;
   fetchFantasyTeam: typeof mantra.fetchFantasyTeam;
   fetchMantraLeague?: typeof mantra.fetchMantraLeague;
+  fetchAllMantraPlayers?: typeof mantra.fetchAllMantraPlayers;
+  fetchMantraProfile?: typeof mantra.fetchMantraProfile;
 };
 
 export type ManagerSquadsMarker = {
@@ -35,13 +37,19 @@ function defaultClient(): PremiumSquadsClient {
     fetchLeagueTeams: mantra.fetchLeagueTeams,
     fetchFantasyTeam: mantra.fetchFantasyTeam,
     fetchMantraLeague: mantra.fetchMantraLeague,
+    fetchAllMantraPlayers: mantra.fetchAllMantraPlayers,
+    fetchMantraProfile: mantra.fetchMantraProfile,
   };
 }
 
-function uiTournamentIds(): number[] {
+function playerFullName(first: string | null | undefined, last: string): string {
+  return [first, last].filter(Boolean).join(" ").trim() || last;
+}
+
+function premiumTournamentIds(): number[] {
   return [
     ...new Set(
-      uiLeagues()
+      premiumLeagues()
         .map((league) => league.mantraTournamentId)
         .filter((id): id is number => id != null),
     ),
@@ -79,7 +87,7 @@ function discoveryLeagues(
     if (!current.division && row.division) current.division = row.division;
   };
 
-  const tournaments = uiTournamentIds();
+  const tournaments = premiumTournamentIds();
   if (tournaments.length) {
     const rows = database
       .prepare(
@@ -96,7 +104,7 @@ function discoveryLeagues(
     for (const row of rows) put(row);
   }
 
-  for (const league of allLiveLeagues()) {
+  for (const league of allPremiumLeagues()) {
     for (const division of league.mantraDivisions) {
       put({
         id: division.leagueId,
@@ -248,6 +256,137 @@ function leagueTeamCount(database: Database.Database, leagueId: number): number 
   ).n;
 }
 
+function managerSquadPlayerIds(database: Database.Database, managerId: number): number[] {
+  const ids = new Set<number>();
+  const rows = database
+    .prepare(`SELECT players_json AS playersJson FROM mantra_fantasy_teams WHERE user_id = ?`)
+    .all(managerId) as Array<{ playersJson: string | null }>;
+  for (const row of rows) {
+    try {
+      const parsed = JSON.parse(row.playersJson || "[]") as unknown;
+      if (!Array.isArray(parsed)) continue;
+      for (const value of parsed) {
+        const id = Number(value);
+        if (Number.isSafeInteger(id) && id > 0) ids.add(id);
+      }
+    } catch {
+      /* ignore bad roster JSON */
+    }
+  }
+  return [...ids];
+}
+
+function managerTournamentIds(database: Database.Database, managerId: number): number[] {
+  return [
+    ...new Set(
+      managerTeamRows(database, managerId)
+        .map((row) => row.tournamentId)
+        .filter((id): id is number => id != null && Number.isSafeInteger(id) && id > 0),
+    ),
+  ];
+}
+
+function upsertMantraClubFields(
+  database: Database.Database,
+  tournamentId: number | null,
+  players: Array<{
+    id: number;
+    name: string;
+    firstName: string | null;
+    positions: string[];
+    clubId: number | null;
+    clubName: string;
+  }>,
+): number {
+  const upsert = database.prepare(
+    `INSERT INTO mantra_players (
+       id, name, first_name, full_name, positions_json, club_id, club_name, tournament_id
+     ) VALUES (
+       @id, @name, @firstName, @fullName, @positionsJson, @clubId, @clubName, @tournamentId
+     )
+     ON CONFLICT(id) DO UPDATE SET
+       name = excluded.name,
+       first_name = excluded.first_name,
+       full_name = excluded.full_name,
+       positions_json = excluded.positions_json,
+       club_id = excluded.club_id,
+       club_name = excluded.club_name,
+       tournament_id = COALESCE(excluded.tournament_id, tournament_id)`,
+  );
+  const tx = database.transaction(() => {
+    let n = 0;
+    for (const player of players) {
+      if (!Number.isSafeInteger(player.id) || player.id <= 0) continue;
+      const name = String(player.name || "").trim() || `#${player.id}`;
+      upsert.run({
+        id: player.id,
+        name,
+        firstName: player.firstName,
+        fullName: playerFullName(player.firstName, name),
+        positionsJson: JSON.stringify(player.positions ?? []),
+        clubId: player.clubId,
+        clubName: String(player.clubName || "").trim() || null,
+        tournamentId,
+      });
+      n += 1;
+    }
+    return n;
+  });
+  return tx();
+}
+
+async function refreshManagerClubNames(
+  managerId: number,
+  options: {
+    database: Database.Database;
+    client: PremiumSquadsClient;
+  },
+): Promise<number> {
+  const { database, client } = options;
+  let upserted = 0;
+  const tournamentIds = managerTournamentIds(database, managerId);
+  if (client.fetchAllMantraPlayers) {
+    for (const tournamentId of tournamentIds) {
+      try {
+        const list = await client.fetchAllMantraPlayers(tournamentId);
+        upserted += upsertMantraClubFields(database, tournamentId, list);
+        console.log(`premium clubs: t${tournamentId} list=${list.length}`);
+      } catch (error) {
+        console.warn(
+          `premium clubs t${tournamentId} failed:`,
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+  }
+
+  const fetchProfile = client.fetchMantraProfile;
+  if (!fetchProfile) return upserted;
+  const squadIds = managerSquadPlayerIds(database, managerId);
+  if (squadIds.length === 0) return upserted;
+  const known = new Set(
+    (
+      database
+        .prepare(`SELECT id FROM mantra_players WHERE id IN (${squadIds.map(() => "?").join(",")})`)
+        .all(...squadIds) as Array<{ id: number }>
+    ).map((row) => row.id),
+  );
+  const fallbackTournamentId = tournamentIds[0] ?? null;
+  for (const id of squadIds) {
+    if (known.has(id)) continue;
+    try {
+      const player = await fetchProfile(id);
+      upserted += upsertMantraClubFields(database, fallbackTournamentId, [player]);
+    } catch (error) {
+      console.warn(
+        `premium club profile ${id} failed:`,
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
+  return upserted;
+}
+
 async function pullManagerSquads(
   managerId: number,
   options: {
@@ -336,6 +475,9 @@ export async function ensureManagerPremiumSquads(
       database,
       client,
     });
+    if (force) {
+      await refreshManagerClubNames(managerId, { database, client });
+    }
     markSquadsSynced(
       managerId,
       managerTeamRows(database, managerId).map((row) => row.id),

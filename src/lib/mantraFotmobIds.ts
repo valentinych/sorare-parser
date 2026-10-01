@@ -29,7 +29,12 @@ export const FOTMOB_CLUB_ALIASES: Record<string, string> = {
   "istanbul basaksehir": "basaksehir",
   "istanbul basaksehir fk": "basaksehir",
   "buyuksehir belediye": "basaksehir",
+  "buyuksehir belediye erzurum spor kulubu": "erzurumspor",
+  "caykur rize": "rizespor",
+  "caykur rize spor kulubu": "rizespor",
   "caykur rizespor": "rizespor",
+  "eyup spor": "eyupspor",
+  "eyup spor kulubu": "eyupspor",
   "gaziantep fk": "gaziantep",
   "gaziantep": "gaziantep",
   "fatih karagumruk": "karagumruk",
@@ -37,8 +42,13 @@ export const FOTMOB_CLUB_ALIASES: Record<string, string> = {
   "galatasaray sk": "galatasaray",
   "fenerbahce sk": "fenerbahce",
   "besiktas jk": "besiktas",
+  "besiktas jimnastik kulubu": "besiktas",
+  "goztepe spor kulubu": "goztepe",
   "kasimpasa sk": "kasimpasa",
   "trabzonspor as": "trabzonspor",
+  "yeni corumspor": "corum",
+  "yeni corumspor spor kulubu": "corum",
+  "borussia monchengladbach": "borussia mbach",
 };
 
 /**
@@ -49,6 +59,37 @@ export const FOTMOB_PLAYER_ALIASES: Record<string, Record<string, string>> = {
   chelsea: {
     "pedro junqueira": "joao pedro",
     "joao pedro junqueira": "joao pedro",
+  },
+  arsenal: {
+    magalhaes: "gabriel",
+    "gabriel magalhaes": "gabriel",
+  },
+  "bayer leverkusen": {
+    "ezequiel fernandez": "equi fernandez",
+  },
+  stuttgart: {
+    "julian chabot": "jeff chabot",
+    chabot: "jeff chabot",
+  },
+  "union berlin": {
+    "wooyeong jeong": "woo yeong jeong",
+    jeong: "woo yeong jeong",
+  },
+  "schalke 04": {
+    "soufiane el faouzi": "soufian el faouzi",
+    "el faouzi": "soufian el faouzi",
+  },
+  brentford: {
+    "yegor yarmolyuk": "yehor yarmoliuk",
+    yarmolyuk: "yehor yarmoliuk",
+  },
+  "stoke city": {
+    "maksym taloverov": "maksym talovierov",
+    taloverov: "maksym talovierov",
+  },
+  brighton: {
+    "matt oriley": "matthew oriley",
+    oriley: "matthew oriley",
   },
 };
 
@@ -121,6 +162,59 @@ function nameScore(mantra: MantraPlayer, fotmob: FotmobPlayer): number {
     }
   }
   return best;
+}
+
+const NAME_LINK_MIN = 80;
+
+/** Unique top score ≥80. Ties (two Gabriels at 87) stay unmatched. */
+function uniqueBestCandidate(
+  player: MantraPlayer,
+  candidates: FotmobPlayer[],
+): { candidate: FotmobPlayer; score: number } | null {
+  const scored = candidates
+    .map((candidate) => ({ candidate, score: nameScore(player, candidate) }))
+    .filter((row) => row.score >= NAME_LINK_MIN)
+    .sort((a, b) => b.score - a.score || a.candidate.id - b.candidate.id);
+  if (!scored.length) return null;
+  if (scored.length > 1 && scored[0]!.score === scored[1]!.score) return null;
+  return scored[0]!;
+}
+
+type FotmobProposal = { mantraId: number; fotmobId: number; score: number };
+
+function proposeFotmobLinks(
+  mantra: MantraPlayer[],
+  fotmobById: Map<number, FotmobPlayer>,
+  alreadyLinked: Set<number>,
+): FotmobProposal[] {
+  const proposals: FotmobProposal[] = [];
+  for (const player of mantra) {
+    if (player.fotmob_player_id != null || !player.club_name) continue;
+    const candidates = clubCandidates(player, fotmobById).filter(
+      (candidate) => !alreadyLinked.has(candidate.id),
+    );
+    const best = uniqueBestCandidate(player, candidates);
+    if (!best) continue;
+    proposals.push({ mantraId: player.id, fotmobId: best.candidate.id, score: best.score });
+  }
+  return proposals;
+}
+
+/** One FotMob id, one Mantra player: unique highest nameScore wins a contest. */
+function winningProposals(proposals: FotmobProposal[]): FotmobProposal[] {
+  const owners = new Map<number, FotmobProposal[]>();
+  for (const proposal of proposals) {
+    const list = owners.get(proposal.fotmobId) ?? [];
+    list.push(proposal);
+    owners.set(proposal.fotmobId, list);
+  }
+  const won: FotmobProposal[] = [];
+  for (const list of owners.values()) {
+    list.sort((a, b) => b.score - a.score || a.mantraId - b.mantraId);
+    if (list.length > 1 && list[0]!.score === list[1]!.score) continue;
+    won.push(list[0]!);
+  }
+  return won;
 }
 
 export type UnmatchedFotmobReason =
@@ -211,21 +305,7 @@ export function syncMantraFotmobIds(
   const mantra = loadMantraPlayers(tournamentId);
   const fotmobById = loadFotmobPlayers(fotmobLeagueId);
   const alreadyLinked = alreadyLinkedIds();
-  const proposals = new Map<number, number>();
-  for (const player of mantra) {
-    if (player.fotmob_player_id != null || !player.club_name) continue;
-    const candidates = clubCandidates(player, fotmobById).filter(
-      (candidate) => !alreadyLinked.has(candidate.id) && nameScore(player, candidate) >= 80,
-    );
-    if (candidates.length === 1) proposals.set(player.id, candidates[0]!.id);
-  }
-
-  const owners = new Map<number, number[]>();
-  for (const [mantraId, fotmobId] of proposals) {
-    const list = owners.get(fotmobId) ?? [];
-    list.push(mantraId);
-    owners.set(fotmobId, list);
-  }
+  const won = winningProposals(proposeFotmobLinks(mantra, fotmobById, alreadyLinked));
 
   const update = db.prepare(
     `UPDATE mantra_players
@@ -234,8 +314,7 @@ export function syncMantraFotmobIds(
   );
   let linked = 0;
   const tx = db.transaction(() => {
-    for (const [mantraId, fotmobId] of proposals) {
-      if (owners.get(fotmobId)?.length !== 1) continue;
+    for (const { mantraId, fotmobId } of won) {
       linked += update.run(fotmobId, mantraId).changes;
     }
   });
@@ -254,7 +333,7 @@ export function unmatchedMantraFotmob(
   const mantra = loadMantraPlayers(tournamentId);
   const fotmobById = loadFotmobPlayers(fotmobLeagueId);
   const alreadyLinked = alreadyLinkedIds();
-  const proposals = new Map<number, { fotmobId: number; name: string }>();
+  const proposals = new Map<number, { fotmobId: number; name: string; score: number }>();
   const out: UnmatchedFotmobPlayer[] = [];
 
   for (const player of mantra) {
@@ -274,7 +353,7 @@ export function unmatchedMantraFotmob(
       });
       continue;
     }
-    const named = atClub.filter((candidate) => nameScore(player, candidate) >= 80);
+    const named = atClub.filter((candidate) => nameScore(player, candidate) >= NAME_LINK_MIN);
     if (!named.length) {
       out.push({
         id: player.id,
@@ -298,7 +377,8 @@ export function unmatchedMantraFotmob(
       });
       continue;
     }
-    if (free.length !== 1) {
+    const best = uniqueBestCandidate(player, free);
+    if (!best) {
       out.push({
         id: player.id,
         name: label,
@@ -308,17 +388,20 @@ export function unmatchedMantraFotmob(
       });
       continue;
     }
-    proposals.set(player.id, { fotmobId: free[0]!.id, name: label });
+    proposals.set(player.id, { fotmobId: best.candidate.id, name: label, score: best.score });
   }
 
-  const owners = new Map<number, number[]>();
-  for (const [mantraId, { fotmobId }] of proposals) {
-    const list = owners.get(fotmobId) ?? [];
-    list.push(mantraId);
-    owners.set(fotmobId, list);
-  }
-  for (const [mantraId, { fotmobId, name }] of proposals) {
-    if (owners.get(fotmobId)?.length === 1) continue;
+  const wonIds = new Set(
+    winningProposals(
+      [...proposals.entries()].map(([mantraId, rec]) => ({
+        mantraId,
+        fotmobId: rec.fotmobId,
+        score: rec.score,
+      })),
+    ).map((row) => row.mantraId),
+  );
+  for (const [mantraId, { name }] of proposals) {
+    if (wonIds.has(mantraId)) continue;
     const player = mantra.find((p) => p.id === mantraId);
     out.push({
       id: mantraId,

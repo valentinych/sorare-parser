@@ -5,7 +5,7 @@ import {
   initI18n,
   setUiPreferences,
   tr,
-} from "./i18n.js?v=28";
+} from "./i18n.js?v=31";
 import { googleSignInEnabled } from "./live-draft-access.js?v=1";
 
 initI18n();
@@ -16,11 +16,13 @@ export const PAGE_PATHS = {
   matches: "/matches",
   live: "/live",
   auctions: "/auctions",
+  tables: "/tables",
   xi: "/xi",
   sorare: "/sorare",
   mapping: "/mapping",
   premium: "/premium",
   "league-one": "/league-one",
+  "mantra-doma": "/mantra-doma",
   builder: "/builder",
   ref: "/ref",
   "live-draft": "/live-draft",
@@ -303,8 +305,6 @@ export function renderAccount() {
   );
   const mappingTab = document.querySelector(`.tab[data-view="mapping"]`);
   if (mappingTab) mappingTab.hidden = !expected11Admin;
-  const leagueOneTab = document.querySelector(`.tab[data-view="league-one"]`);
-  if (leagueOneTab) leagueOneTab.hidden = !expected11Admin;
   const premiumTab = document.querySelector(`.tab[data-view="premium"]`);
   if (premiumTab) premiumTab.hidden = !expected11Premium;
   const liveDraft = Boolean(
@@ -368,6 +368,15 @@ export async function loadAccount() {
     };
   }
   renderAccount();
+  syncLangSwitcher();
+  const postAuthPath = sessionStorage.getItem("postAuthPath");
+  if (postAuthPath && accountState.authenticated) {
+    sessionStorage.removeItem("postAuthPath");
+    if (location.pathname !== postAuthPath) {
+      location.replace(postAuthPath);
+      return;
+    }
+  }
 }
 
 export async function loadCompetitionsList() {
@@ -377,7 +386,56 @@ export async function loadCompetitionsList() {
   competitionResolve = data.resolve || [];
 }
 
+
+function readCookie(name) {
+  const parts = `; ${document.cookie}`.split(`; ${name}=`);
+  if (parts.length < 2) return null;
+  return decodeURIComponent(parts.pop().split(";").shift() || "") || null;
+}
+
+function writeLocaleCookie(locale) {
+  document.cookie = `uiLocale=${encodeURIComponent(locale)}; path=/; max-age=31536000; samesite=lax`;
+}
+
+function syncLangSwitcher() {
+  const current = getUiLocale();
+  for (const btn of document.querySelectorAll(".lang-switch-btn[data-locale]")) {
+    const active = btn.getAttribute("data-locale") === current;
+    btn.classList.toggle("is-active", active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+  }
+}
+
+async function applyLocale(locale) {
+  if (!locale) return;
+  setUiPreferences({ locale });
+  writeLocaleCookie(locale);
+  syncLangSwitcher();
+  const accountLocale = document.getElementById("account-locale");
+  if (accountLocale) accountLocale.value = locale;
+  if (accountState.authenticated) {
+    try {
+      const data = await apiJson("/api/me", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ locale }),
+      });
+      if (data?.user) accountState.user = data.user;
+    } catch {
+      // Local preference still applied.
+    }
+  }
+}
+
 function bindAccountListeners() {
+  document.querySelector(".lang-switch")?.addEventListener("click", (event) => {
+    const btn = event.target.closest(".lang-switch-btn[data-locale]");
+    if (!btn) return;
+    applyLocale(btn.getAttribute("data-locale")).catch(() => {});
+  });
+  document.getElementById("account-locale")?.addEventListener("change", (event) => {
+    applyLocale(event.target.value).catch(() => {});
+  });
   document.getElementById("account-login")?.addEventListener("click", (e) => {
     if (googleSignInEnabled(accountState)) return;
     e.preventDefault();

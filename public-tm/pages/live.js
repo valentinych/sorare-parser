@@ -15,7 +15,7 @@ import {
   slugifyLeagueName,
   tr,
   apiJson,
-} from "../core.js?v=7";
+} from "../core.js?v=11";
 
 let livePayload = null;
 /** @type {string | null} selected round tab; null follows server currentRound */

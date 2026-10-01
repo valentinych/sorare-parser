@@ -20,7 +20,8 @@
     "retry:mantra-auctions": "tsx src/sync/runMantraAuctions.ts --retry-failed",
     "sync:mantra-match": "tsx src/sync/runMantraMatch.ts",
     "sync:mantra-tours": "tsx src/sync/runMantraTours.ts",
-    "sync:mantra-lineups": "tsx src/sync/runMantraLineups.ts",
+    "sync:tables": "tsx src/sync/runTablesBackfill.ts",
+    "sync:mantra-nicknames": "tsx src/sync/runMantraNicknames.ts",
     "sync:odds": "tsx src/sync/runOdds.ts",
     "sync:live": "tsx src/sync/runLive.ts",
     "sync:stats": "tsx src/sync/runPlayerStatsHistory.ts",
@@ -37,6 +38,7 @@
     "dev:tm": "tsx watch src/tm-server.ts",
     "worker:live-poll": "tsx src/workers/liveDataPoll.ts",
     "worker:live-compute": "tsx src/workers/liveCompute.ts",
+    "publish:automops": "tsx scripts/publish-automops.mjs",
     "db:reset": "rm -f data/app.db data/app.db-wal data/app.db-shm"
   },
   "dependencies": {

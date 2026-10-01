@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type Database from "better-sqlite3";
-import { getDb } from "../db/index.js";
+import { getDb, migrateFootmopsPredictions } from "../db/index.js";
 import { leagueBySlug } from "../lib/afLeagues.js";
 import {
   invalidateComputed,
@@ -21,6 +21,10 @@ export const CHAMPIONSHIP_TOUR = 2;
 
 const CHAMPIONSHIP_TOURNAMENT_ID =
   leagueBySlug("championship")?.mantraTournamentId ?? 11;
+
+function tournamentIdForLeague(league: string): number {
+  return leagueBySlug(league)?.mantraTournamentId ?? CHAMPIONSHIP_TOURNAMENT_ID;
+}
 
 const SNAPSHOT_PATH = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -43,8 +47,8 @@ CREATE TABLE IF NOT EXISTS footmops_predictions (
   club_key TEXT NOT NULL,
   source_club TEXT NOT NULL,
   source_player TEXT NOT NULL,
-  lineup_group TEXT NOT NULL CHECK (lineup_group IN ('starting', 'bench')),
-  displayed_percentage REAL NOT NULL,
+  lineup_group TEXT NOT NULL CHECK (lineup_group IN ('starting', 'bench', 'out')),
+  displayed_percentage REAL,
   mantra_player_id INTEGER,
   link_status TEXT NOT NULL CHECK (link_status IN ('linked', 'unmatched', 'ambiguous')),
   PRIMARY KEY (league, tour, club_key, source_player)
@@ -54,11 +58,11 @@ CREATE INDEX IF NOT EXISTS idx_footmops_predictions_player
   ON footmops_predictions(mantra_player_id);
 `;
 
-export type FootmopsLineupGroup = "starting" | "bench";
+export type FootmopsLineupGroup = "starting" | "bench" | "out";
 
 export type FootmopsPlayer = {
   name: string;
-  percentage: number;
+  percentage: number | null;
   group: FootmopsLineupGroup;
 };
 
@@ -77,7 +81,7 @@ export type FootmopsSnapshot = {
 };
 
 export type FootmopsHint = {
-  displayedPercentage: number;
+  displayedPercentage: number | null;
   lineupGroup: FootmopsLineupGroup;
   sourceName: string;
 };
@@ -90,30 +94,46 @@ export type FootmopsImportResult = {
   linked: number;
   unmatched: number;
   ambiguous: number;
-  unmatchedPlayers: Array<{ club: string; name: string; percentage: number }>;
+  unmatchedPlayers: Array<{
+    club: string;
+    name: string;
+    percentage: number | null;
+  }>;
 };
 
 type MantraClub = { id: number; name: string };
 
 function isGroup(value: string): value is FootmopsLineupGroup {
-  return value === "starting" || value === "bench";
+  return value === "starting" || value === "bench" || value === "out";
+}
+
+const GROUP_RANK: Record<FootmopsLineupGroup, number> = {
+  starting: 0,
+  bench: 1,
+  out: 2,
+};
+
+function finitePercentage(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 function mergePlayers(players: FootmopsPlayer[]): FootmopsPlayer[] {
   const byKey = new Map<string, FootmopsPlayer>();
   for (const player of players) {
     const name = player.name.trim();
-    const percentage = Number(player.percentage);
-    if (!name || !Number.isFinite(percentage)) continue;
+    if (!name) continue;
     const group = isGroup(player.group) ? player.group : "bench";
+    const percentage = finitePercentage(player.percentage);
+    if (group !== "out" && percentage == null) continue;
     const key = normName(name);
     const current = byKey.get(key);
     if (
       !current ||
-      percentage > current.percentage ||
-      (percentage === current.percentage &&
-        group === "starting" &&
-        current.group !== "starting")
+      GROUP_RANK[group] < GROUP_RANK[current.group] ||
+      (group === current.group &&
+        (percentage ?? -1) > (current.percentage ?? -1))
     ) {
       byKey.set(key, { name, percentage, group });
     }
@@ -252,10 +272,12 @@ export function footmopsByPlayer(
   database: Database.Database = getDb(),
 ): Map<number, FootmopsHint> {
   database.exec(FOOTMOPS_SCHEMA);
+  migrateFootmopsPredictions(database);
   const rows = database
     .prepare(
       `SELECT mantra_player_id AS mantraPlayerId, source_player AS sourceName,
-              lineup_group AS lineupGroup, displayed_percentage AS displayedPercentage
+              lineup_group AS lineupGroup, displayed_percentage AS displayedPercentage,
+              tour
        FROM footmops_predictions
        WHERE link_status = 'linked' AND mantra_player_id IS NOT NULL`,
     )
@@ -263,27 +285,42 @@ export function footmopsByPlayer(
     mantraPlayerId: number;
     sourceName: string;
     lineupGroup: FootmopsLineupGroup;
-    displayedPercentage: number;
+    displayedPercentage: number | null;
+    tour: number;
   }>;
-  const rank = { starting: 0, bench: 1 };
-  const map = new Map<number, FootmopsHint>();
+  const map = new Map<number, FootmopsHint & { tour: number }>();
   for (const row of rows) {
+    if (!isGroup(row.lineupGroup)) continue;
     const current = map.get(row.mantraPlayerId);
-    if (
-      current &&
-      (rank[current.lineupGroup] < rank[row.lineupGroup] ||
-        (current.lineupGroup === row.lineupGroup &&
-          current.displayedPercentage >= row.displayedPercentage))
-    ) {
-      continue;
+    if (current) {
+      if (row.tour < current.tour) continue;
+      if (
+        row.tour === current.tour &&
+        (GROUP_RANK[current.lineupGroup] < GROUP_RANK[row.lineupGroup] ||
+          (current.lineupGroup === row.lineupGroup &&
+            (current.displayedPercentage ?? -1) >=
+              (row.displayedPercentage ?? -1)))
+      ) {
+        continue;
+      }
     }
     map.set(row.mantraPlayerId, {
       displayedPercentage: row.displayedPercentage,
       lineupGroup: row.lineupGroup,
       sourceName: row.sourceName,
+      tour: row.tour,
     });
   }
-  return map;
+  return new Map(
+    [...map.entries()].map(([id, hint]) => [
+      id,
+      {
+        displayedPercentage: hint.displayedPercentage,
+        lineupGroup: hint.lineupGroup,
+        sourceName: hint.sourceName,
+      },
+    ]),
+  );
 }
 
 export function importFootmopsSnapshot(
@@ -292,6 +329,7 @@ export function importFootmopsSnapshot(
   options: { tournamentId?: number; bustCache?: boolean } = {},
 ): FootmopsImportResult {
   database.exec(FOOTMOPS_SCHEMA);
+  migrateFootmopsPredictions(database);
   const tournamentId =
     options.tournamentId ??
     leagueBySlug(snapshot.league)?.mantraTournamentId ??
@@ -426,10 +464,14 @@ export function relinkFootmopsFromManualMappings(
   let updated = 0;
   for (const row of rows) {
     if (scope && normName(row.sourcePlayer) !== scope.sourceKey) continue;
-    const club = resolveClub(database, row.sourceClub, CHAMPIONSHIP_TOURNAMENT_ID);
+    const club = resolveClub(
+      database,
+      row.sourceClub,
+      tournamentIdForLeague(row.league),
+    );
     if (club.status !== "linked" || !club.club) continue;
     if (scope && club.club.id !== scope.mantraClubId) continue;
-    const linked = resolveExpected11Player(database, club.club, row.sourcePlayer);
+    const linked = resolveFootmopsPlayer(database, club.club, row.sourcePlayer);
     const nextId = linked.player?.id ?? null;
     const nextStatus =
       linked.status === "linked"
@@ -455,7 +497,7 @@ export function listUnmatchedFootmopsPlayers(
   tour: number;
   sourceClub: string;
   sourcePlayer: string;
-  displayedPercentage: number;
+  displayedPercentage: number | null;
   lineupGroup: FootmopsLineupGroup;
   mantraClubId: number;
   mantraClubName: string;
@@ -476,7 +518,7 @@ export function listUnmatchedFootmopsPlayers(
     tour: number;
     sourceClub: string;
     sourcePlayer: string;
-    displayedPercentage: number;
+    displayedPercentage: number | null;
     lineupGroup: FootmopsLineupGroup;
     linkStatus: "unmatched" | "ambiguous";
   }>;
@@ -485,14 +527,18 @@ export function listUnmatchedFootmopsPlayers(
     tour: number;
     sourceClub: string;
     sourcePlayer: string;
-    displayedPercentage: number;
+    displayedPercentage: number | null;
     lineupGroup: FootmopsLineupGroup;
     mantraClubId: number;
     mantraClubName: string;
     linkStatus: "unmatched" | "ambiguous";
   }> = [];
   for (const row of rows) {
-    const club = resolveClub(database, row.sourceClub, CHAMPIONSHIP_TOURNAMENT_ID);
+    const club = resolveClub(
+      database,
+      row.sourceClub,
+      tournamentIdForLeague(row.league),
+    );
     if (club.status !== "linked" || !club.club) continue;
     out.push({
       ...row,
@@ -511,13 +557,17 @@ export function footmopsHasSourcePlayer(
   database.exec(FOOTMOPS_SCHEMA);
   const rows = database
     .prepare(
-      `SELECT source_club AS sourceClub, source_player AS sourcePlayer
+      `SELECT league, source_club AS sourceClub, source_player AS sourcePlayer
        FROM footmops_predictions`,
     )
-    .all() as Array<{ sourceClub: string; sourcePlayer: string }>;
+    .all() as Array<{ league: string; sourceClub: string; sourcePlayer: string }>;
   for (const row of rows) {
     if (normName(row.sourcePlayer) !== sourceKey) continue;
-    const club = resolveClub(database, row.sourceClub, CHAMPIONSHIP_TOURNAMENT_ID);
+    const club = resolveClub(
+      database,
+      row.sourceClub,
+      tournamentIdForLeague(row.league),
+    );
     if (club.status === "linked" && club.club?.id === mantraClubId) return true;
   }
   return false;

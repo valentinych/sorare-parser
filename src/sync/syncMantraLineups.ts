@@ -78,7 +78,7 @@ function patchSquadScores(
   );
   return prev.map((p) => {
     const n = byKey.get(`${p.playerId ?? ""}:${p.name}`);
-    return n ? { ...p, scoreLabel: n.scoreLabel } : p;
+    return n ? { ...p, scoreLabel: n.scoreLabel, baseLabel: n.baseLabel ?? p.baseLabel } : p;
   });
 }
 
@@ -166,19 +166,44 @@ function readLineupsFile(file: string): MantraLineupsFile | null {
   }
 }
 
+function writeLineupsFile(dest: string, file: MantraLineupsFile): void {
+  mkdirSync(path.dirname(dest), { recursive: true });
+  writeFileSync(dest, JSON.stringify(file, null, 2));
+}
+
 /** Persist a per-round copy so Ideal/Real + scores stay viewable after the next tour. */
 export function archiveMantraLineups(slug: string, file: MantraLineupsFile): void {
   if (file.round == null) return;
   const dest = lineupsArchivePath(slug, file.round);
   try {
-    mkdirSync(path.dirname(dest), { recursive: true });
-    writeFileSync(dest, JSON.stringify({ ...file, slug }, null, 2));
+    writeLineupsFile(dest, { ...file, slug });
   } catch (err) {
     console.warn(
       "Could not archive Mantra lineups:",
       err instanceof Error ? err.message : err,
     );
   }
+}
+
+/**
+ * Extra-league finished tours: write `mantra-lineups-{slug}-r{N}.json` only.
+ * Never touches the live six leagues' `mantra-lineups.json`.
+ */
+export function writeMantraLineupsRoundArchive(
+  slug: string,
+  round: string | number,
+  matches: Record<string, MantraMatch>,
+): string {
+  const dest = lineupsArchivePath(slug, round);
+  const prev = readLineupsFile(dest);
+  const file: MantraLineupsFile = {
+    syncedAt: new Date().toISOString(),
+    round: Number(round),
+    slug,
+    matches: { ...(prev?.matches ?? {}), ...matches },
+  };
+  writeLineupsFile(dest, file);
+  return dest;
 }
 
 export function loadMantraLineups(
@@ -286,7 +311,7 @@ export function takeSquadPlayerForSlot(
   return scored[0]!.p;
 }
 
-function enrichFromDb(match: MantraMatch, tournamentId: number): MantraMatch {
+export function enrichFromDb(match: MantraMatch, tournamentId: number): MantraMatch {
   const db = getDb();
   const lookup = db.prepare(
     `SELECT id, positions_json, club_name FROM mantra_players WHERE id = ?`,

@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   matchPhase,
   parseFotmobFixture,
+  parseFotmobSquadInjury,
   scoresFromFotmobStatus,
 } from "./fotmob.js";
 
@@ -88,4 +89,19 @@ test("NS from more than 4 hours ago is not treated as live", () => {
   } finally {
     Date.now = realNow;
   }
+});
+
+test("parseFotmobSquadInjury reads injured flag and expectedReturn", () => {
+  const hit = parseFotmobSquadInjury({
+    id: 836436,
+    name: "Gabriel Strefezza",
+    injured: true,
+    injury: { id: "6", expectedReturn: "Early October 2026" },
+  });
+  assert.equal(hit?.playerId, 836436);
+  assert.equal(hit?.expectedReturn, "Early October 2026");
+  assert.equal(
+    parseFotmobSquadInjury({ id: 1, name: "Fit", injured: false, injury: null }),
+    null,
+  );
 });

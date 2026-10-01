@@ -1,5 +1,5 @@
-/** FotMob public data API (www.fotmob.com/api/data/…). ≤4 req/s via shared limiter. */
-import { rateLimit4perSec } from "../lib/rateLimit.js";
+/** FotMob public data API (www.fotmob.com/api/data/…). ≤40 req/s, own limiter. */
+import { rateLimitFotmob } from "../lib/rateLimit.js";
 import { withTimeout } from "../lib/withTimeout.js";
 
 const BASE = "https://www.fotmob.com/api/data";
@@ -31,7 +31,46 @@ export type FotmobSquadPlayer = {
   shirtNumber: number | null;
   positionIdsDesc: string | null;
   roleKey: string | null;
+  injured?: boolean;
+  injuryName?: string | null;
+  expectedReturn?: string | null;
 };
+
+export type FotmobSquadInjury = {
+  playerId: number;
+  name: string;
+  injured: boolean;
+  injuryName: string | null;
+  expectedReturn: string | null;
+};
+
+/** Squad-page injury blob: `{ injured: true, injury: { id, expectedReturn } }`. */
+export function parseFotmobSquadInjury(raw: unknown): FotmobSquadInjury | null {
+  if (!raw || typeof raw !== "object") return null;
+  const rec = raw as Json;
+  const playerId = Number(rec.id);
+  if (!Number.isFinite(playerId) || playerId <= 0) return null;
+  const injuryRaw = rec.injury;
+  const injuryObj =
+    injuryRaw && typeof injuryRaw === "object" ? (injuryRaw as Json) : null;
+  const expectedReturn =
+    injuryObj?.expectedReturn != null && String(injuryObj.expectedReturn).trim()
+      ? String(injuryObj.expectedReturn).trim()
+      : null;
+  const nameRaw =
+    injuryObj?.name ?? injuryObj?.reason ?? injuryObj?.label ?? injuryObj?.type;
+  const injuryName =
+    nameRaw != null && String(nameRaw).trim() ? String(nameRaw).trim() : null;
+  const injuredFlag = rec.injured === true || rec.injured === 1;
+  if (!injuredFlag && !expectedReturn && !injuryName) return null;
+  return {
+    playerId,
+    name: String(rec.name ?? ""),
+    injured: true,
+    injuryName,
+    expectedReturn,
+  };
+}
 
 export type FotmobMatchStatus = {
   utcTime?: string;
@@ -134,7 +173,7 @@ async function fotmobGet(
   if (params) {
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
   }
-  await rateLimit4perSec();
+  await rateLimitFotmob();
   const ac = new AbortController();
   const onAbort = () => ac.abort();
   if (signal) {
@@ -262,6 +301,7 @@ function parseSquadMember(
     raw.shirtNumber != null && Number.isFinite(Number(raw.shirtNumber))
       ? Number(raw.shirtNumber)
       : null;
+  const injury = parseFotmobSquadInjury(raw);
   return {
     id,
     name: String(raw.name ?? ""),
@@ -270,6 +310,9 @@ function parseSquadMember(
     shirtNumber: shirt,
     positionIdsDesc: raw.positionIdsDesc != null ? String(raw.positionIdsDesc) : null,
     roleKey,
+    injured: injury?.injured ?? false,
+    injuryName: injury?.injuryName ?? null,
+    expectedReturn: injury?.expectedReturn ?? null,
   };
 }
 
@@ -436,6 +479,18 @@ export function penaltyMissedFromStatsBlock(statsBlock: Json | undefined): numbe
   );
 }
 
+/** FotMob GK save: label "Saved penalties" / key saved_penalties (not "Saves from penalty"). */
+export function penaltySavedFromStatsBlock(statsBlock: Json | undefined): number {
+  return (
+    statValue(statsBlock, "Saved penalties") ??
+    statValue(statsBlock, "Penalties saved") ??
+    statValue(statsBlock, "Penalty saved") ??
+    statValue(statsBlock, "Saves from penalty") ??
+    statValueByKey(statsBlock, "saved_penalties") ??
+    0
+  );
+}
+
 export type PenaltyEventInput = {
   type: string;
   playerId: number | null;
@@ -547,11 +602,7 @@ function mergePlayerStats(players: FotmobPlayerRating[], playerStats: Json): voi
         statValue(s, "Penalty goals") ??
         0;
       penMissed += penaltyMissedFromStatsBlock(s);
-      penSaved +=
-        statValue(s, "Penalties saved") ??
-        statValue(s, "Penalty saved") ??
-        statValue(s, "Saves from penalty") ??
-        0;
+      penSaved += penaltySavedFromStatsBlock(s);
     }
     p.penaltiesWon = penWon;
     p.penaltiesConceded = penConc;

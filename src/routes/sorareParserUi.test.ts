@@ -32,6 +32,7 @@ test("Sorare parser UI queues remaining missing sides without rebuilding Matches
     "utf8",
   );
   assert.match(html, /id="sorare-capture-remaining"/);
+  assert.match(html, /id="sorare-capture-parallel"/);
   assert.match(html, /Скачать оставшиеся/);
   const start = html.indexOf("function collectRemainingSorareSides");
   const end = html.indexOf("async function refreshSorareStatus");
@@ -42,6 +43,9 @@ test("Sorare parser UI queues remaining missing sides without rebuilding Matches
   assert.match(fn, /failed\.push/);
   assert.match(fn, /captureSorareSide\(/);
   assert.match(fn, /sorareCaptureRemaining\.disabled = true/);
+  assert.match(fn, /sorareParallelWorkers/);
+  assert.match(fn, /Promise\.all/);
+  assert.match(fn, /workers/);
   assert.doesNotMatch(fn, /renderSorareMatches/);
   assert.doesNotMatch(fn, /\/api\/sorare\/matches/);
 });
@@ -54,13 +58,19 @@ test("SorareInside session scrolls the lineups page before capture", async () =>
   assert.match(src, /scrollLineupsPageToLoadAll/);
   assert.match(src, /Scrolling lineups to the bottom to load all matches/);
   assert.match(src, /scrollToLoadLazyContent/);
-  assert.match(src, /Scrolling expanded \$\{league.competitionName\} for \$\{teamName\}/);
-  assert.match(src, /Expanding \$\{league.competitionName\}/);
+  assert.match(
+    src,
+    /Scrolling expanded \$\{league\.label \|\| league\.competitionName\} for \$\{teamName\}/,
+  );
+  assert.match(src, /Expanding \$\{label\}/);
+  assert.match(src, /resolveLeagueAccordionControl/);
+  assert.match(src, /accordionItemMatchesRegion/);
+  assert.match(src, /competitionAccordionRegex/);
   assert.doesNotMatch(src, /Scrolling to load \$\{teamName\} before capture/);
   assert.match(src, /Scrolling lineup popup to the bottom to load all content/);
   assert.match(src, /Scroll did not settle after \$\{maxPasses\} passes/);
   assert.match(src, /SI_SPINNER_SELECTOR/);
-  assert.match(src, /Timed out after 25s waiting for lineup content/);
+  assert.match(src, /Timed out after 35s waiting for lineup content/);
   assert.doesNotMatch(src, /\[role='progressbar'\]/);
   assert.doesNotMatch(src, /Timed out after 90s/);
   const captureStart = src.indexOf("async capture(body: unknown)");
@@ -68,6 +78,7 @@ test("SorareInside session scrolls the lineups page before capture", async () =>
   assert.ok(captureStart > 0 && captureEnd > captureStart);
   const captureFn = src.slice(captureStart, captureEnd);
   assert.match(captureFn, /expandLeagueAccordion/);
+  assert.match(captureFn, /teamName,\s*\n\s*opponentName: opponent/);
   assert.match(captureFn, /scrollToLoadLazyContent/);
   assert.match(captureFn, /untilText: teamName/);
   assert.doesNotMatch(captureFn, /scrollLineupsPageToLoadAll/);
@@ -97,4 +108,36 @@ test("SorareInside capture clicks the lineups match after expanding the league",
   assert.doesNotMatch(clickFn, /team select has no matching option/);
   assert.doesNotMatch(clickFn, /\.click\(\{ timeout: 8_000 \}\)/);
   assert.doesNotMatch(src, /private async clickTeamToOpenPopup/);
+});
+
+test("SorareInside capture opens a dedicated tab and allows parallel slots", async () => {
+  const src = await readFile(
+    new URL("../sync/sorareInsideLineups.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(src, /parseSorareCaptureConcurrency/);
+  assert.match(src, /SORAREINSIDE_CAPTURE_CONCURRENCY/);
+  assert.match(src, /openCapturePage/);
+  assert.match(src, /activeCaptures/);
+  assert.match(src, /captureConcurrency/);
+  assert.match(src, /All \$\{this\.captureConcurrency\} capture slots are busy/);
+  const captureStart = src.indexOf("async capture(body: unknown)");
+  const captureEnd = src.indexOf("let sharedSession");
+  assert.ok(captureStart > 0 && captureEnd > captureStart);
+  const captureFn = src.slice(captureStart, captureEnd);
+  assert.match(captureFn, /openCapturePage/);
+  assert.match(captureFn, /page\.close\(\)/);
+  assert.doesNotMatch(captureFn, /this\.busy = true/);
+  assert.doesNotMatch(captureFn, /const page = await this\.ensureBrowser\(\)/);
+});
+
+test("parseSorareCaptureConcurrency clamps to 1–3", async () => {
+  const { parseSorareCaptureConcurrency } = await import(
+    "../sync/sorareInsideLineups.js"
+  );
+  assert.equal(parseSorareCaptureConcurrency(undefined), 3);
+  assert.equal(parseSorareCaptureConcurrency("2"), 2);
+  assert.equal(parseSorareCaptureConcurrency("0"), 1);
+  assert.equal(parseSorareCaptureConcurrency("9"), 3);
+  assert.equal(parseSorareCaptureConcurrency("nope"), 3);
 });

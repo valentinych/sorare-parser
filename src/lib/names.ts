@@ -9,6 +9,7 @@ export function normName(input: string): string {
     .replace(/œ/gi, "oe")
     .replace(/ł/gi, "l")
     .replace(/đ/gi, "d")
+    .replace(/ß/g, "ss")
     .replace(/ı/g, "i")
     .replace(/İ/g, "i")
     .toLowerCase()

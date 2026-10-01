@@ -18,6 +18,9 @@ import {
   parseBenchAndDnpPlayerLists,
   parseProbabilitiesFromModalText,
   parseProbabilitiesFromPitchCards,
+  pickBestPitchProbabilityParse,
+  pitchStartingParseQuality,
+  scorePitchCardText,
   parseSorareInsideCaptureRequest,
   parseSorareInsideDiscoverRequest,
   parseSorareInsideExpandRequest,
@@ -171,6 +174,26 @@ test("lineupTeamLabelsMatch strips 1./SV/FC/TSG and folds umlauts for Bundesliga
   );
 });
 
+test("lineupTeamLabelsMatch and clubFileSlug fold Turkish ı/İ and Kulübü", () => {
+  assert.equal(
+    lineupTeamLabelsMatch("Kasımpaşa Spor Kulübü", "Kasımpaşa Spor Kulübü"),
+    true,
+  );
+  assert.equal(
+    lineupTeamLabelsMatch("Kasimpasa", "Kasımpaşa Spor Kulübü"),
+    true,
+  );
+  assert.equal(
+    lineupTeamLabelsMatch("Beşiktaş Jimnastik Kulübü", "Beşiktaş Jimnastik Kulübü"),
+    true,
+  );
+  assert.equal(clubFileSlug("Kasımpaşa Spor Kulübü"), "kasimpasa-spor-kulubu");
+  assert.equal(
+    clubFileSlug("İstanbul Başakşehir Futbol Kulübü"),
+    "istanbul-basaksehir-futbol-kulubu",
+  );
+});
+
 test("findLineupAccordionInHtml picks Germany Bundesliga, not Austria or 2. Bundesliga", () => {
   const html = readFileSync(
     new URL("./sorareInsideBundesligaRow.fixture.html", import.meta.url),
@@ -258,6 +281,11 @@ test("accordion competition match keeps Bundesliga distinct from Bundesliga 2", 
   assert.equal(accordionTextMatchesCompetition("Spain - Liga 2", "Liga"), false);
   assert.equal(accordionTextMatchesCompetition("Spain - Liga", "Liga"), true);
   assert.equal(accordionTextMatchesCompetition("Championship", "Championship"), true);
+  // LINEUPS row counts must not look like division suffixes (broke Serie A).
+  assert.equal(accordionTextMatchesCompetition("Serie A 20 LINEUPS", "Serie A"), true);
+  assert.equal(accordionTextMatchesCompetition("Italy - Serie A 20 LINEUPS", "Serie A"), true);
+  assert.equal(accordionTextMatchesCompetition("Brazil - Serie A 20 LINEUPS", "Serie A"), true);
+  assert.equal(accordionTextMatchesCompetition("Serie A 2", "Serie A"), false);
 });
 
 test("parseSorareInsideGamesPayload flattens regions", () => {
@@ -404,6 +432,161 @@ test("parseProbabilitiesFromPitchCards keeps starter badge % and treats grey alt
       ["Paul Onuachu", 60, "starting"],
       ["Franculino Djú", 40, "bench"],
       ["Marcos Rojo", 75, "starting"],
+    ],
+  );
+});
+
+test("parseProbabilitiesFromPitchCards treats alt-before-badge as bench once starter appears", () => {
+  const players = parseProbabilitiesFromPitchCards([
+    `Robert Sánchez 10%\n90%\nJean Butez`,
+    `Álex Valle 40%\n60%\nKaiki`,
+  ]);
+  assert.deepEqual(
+    players.map((p) => [p.name, p.percentage, p.group]),
+    [
+      ["Jean Butez", 90, "starting"],
+      ["Robert Sánchez", 10, "bench"],
+      ["Kaiki", 60, "starting"],
+      ["Álex Valle", 40, "bench"],
+    ],
+  );
+});
+
+test("pickBestPitchProbabilityParse prefers full starter cards over alt-only leaves", () => {
+  const altOnlyLeaves = parseProbabilitiesFromPitchCards([
+    "Robert Sánchez 10%",
+    "Álex Valle 40%",
+    "M. Kempf 10%",
+    "Yan Couto 40%",
+    "L. da Cunha 40%",
+    "Luis Milla 40%",
+    "Rodríguez 20%",
+    "M. Liberali 20%",
+    "A. Douvikas 40%",
+  ]);
+  const fullCards = parseProbabilitiesFromPitchCards([
+    `90%\nJean Butez\nRobert Sánchez 10%`,
+    `60%\nKaiki\nÁlex Valle 40%`,
+    `80%\nJacobo Ramón\nM. Kempf 10%`,
+    `80%\nTrevoh Chalobah\nM. Kempf 10%`,
+    `60%\nIvan Smolčić\nYan Couto 40%`,
+    `60%\nMaxence Caqueret\nL. da Cunha 40%`,
+    `60%\nMaximo Perrone\nLuis Milla 40%`,
+    `60%\nMartin Baturina\nRodríguez 20%`,
+    `80%\nNicolás Paz\nM. Liberali 20%`,
+    `60%\nAssane Diao\nRodríguez 20%`,
+    `60%\nMoise Kean\nA. Douvikas 40%`,
+  ]);
+  const picked = pickBestPitchProbabilityParse(altOnlyLeaves, fullCards);
+  const starters = picked
+    .filter((p) => p.group === "starting")
+    .map((p) => p.name);
+  assert.deepEqual(starters, [
+    "Jean Butez",
+    "Kaiki",
+    "Jacobo Ramón",
+    "Trevoh Chalobah",
+    "Ivan Smolčić",
+    "Maxence Caqueret",
+    "Maximo Perrone",
+    "Martin Baturina",
+    "Nicolás Paz",
+    "Assane Diao",
+    "Moise Kean",
+  ]);
+});
+
+test("scorePitchCardText prefers badge+starter blobs over grey alt leaves", () => {
+  assert.ok(
+    scorePitchCardText("90%\nVanja Milinković-Savić") >
+      scorePitchCardText("M. Olivera 20%"),
+  );
+  assert.ok(
+    scorePitchCardText("80%\nLeonardo Spinazzola\nM. Olivera 20%") >
+      scorePitchCardText("M. Olivera 20%"),
+  );
+});
+
+test("Napoli-like pitch cards recover 11 primaries, not grey alts", () => {
+  const players = parseProbabilitiesFromPitchCards([
+    `90%\nVanja Milinković-Savić`,
+    `90%\nGiovanni Di Lorenzo`,
+    `90%\nAmir Rrahmani`,
+    `60%\nBenoît Badiashile\nRafa Marín 40%`,
+    `80%\nLeonardo Spinazzola\nM. Olivera 20%`,
+    `90%\nStanislav Lobotka\nB. Gilmour 10%`,
+    `60%\nAndré-Frank Zambo Anguissa\nN. Lang 10%`,
+    `60%\nKevin De Bruyne\nA. Vergara 20%`,
+    `80%\nMatteo Politano\nN. Lang 10%`,
+    `90%\nRasmus Højlund\nL. Lucca 10%`,
+    `60%\nDavid Neres\nN. Lang 30%`,
+  ]);
+  const starters = players
+    .filter((p) => p.group === "starting")
+    .sort((a, b) => (b.percentage ?? 0) - (a.percentage ?? 0));
+  assert.equal(starters.length, 11);
+  assert.ok(starters.every((p) => (p.percentage ?? 0) >= 60));
+  assert.ok(starters.some((p) => p.name === "Vanja Milinković-Savić"));
+  assert.ok(starters.some((p) => p.name === "Rasmus Højlund"));
+  assert.ok(starters.some((p) => p.name === "Leonardo Spinazzola"));
+  assert.equal(players.find((p) => p.name === "M. Olivera")?.group, "bench");
+  assert.equal(players.find((p) => p.name === "Rafa Marín")?.group, "bench");
+
+  // Mis-paired flat text (3 high + alts) must lose to full cards.
+  const badText = parseProbabilitiesFromModalText(`
+Amir Rrahmani
+90%
+Vanja Milinković-Savić
+80%
+Giovanni Di Lorenzo
+60%
+Rafa Marín 40%
+N. Lang 30%
+M. Olivera 20%
+A. Vergara 20%
+B. Gilmour 10%
+L. Lucca 10%
+`);
+  const picked = pickBestPitchProbabilityParse(badText, players);
+  assert.ok(pitchStartingParseQuality(picked) > pitchStartingParseQuality(badText));
+  assert.equal(
+    picked.filter((p) => p.group === "starting").length,
+    11,
+  );
+});
+
+test("parseProbabilitiesFromModalText keeps badge starters over grey alt lines", () => {
+  const players = parseProbabilitiesFromModalText(`
+90%
+Jean Butez
+Robert Sánchez 10%
+60%
+Kaiki
+Álex Valle 40%
+`);
+  assert.equal(players.find((p) => p.name === "Jean Butez")?.group, "starting");
+  assert.equal(players.find((p) => p.name === "Jean Butez")?.percentage, 90);
+  assert.equal(players.find((p) => p.name === "Robert Sánchez")?.group, "bench");
+  assert.equal(players.find((p) => p.name === "Kaiki")?.percentage, 60);
+  assert.equal(players.find((p) => p.name === "Álex Valle")?.group, "bench");
+});
+
+test("parseBenchAndDnpPlayerLists stops DNP after SorareInside chrome", () => {
+  const players = parseBenchAndDnpPlayerLists(`
+DNP Players
+Bremer
+Jhon Lucumí
+SorareInside.com
+First published: 6 days ago
+Manuel Locatelli
+Kenan Yıldız
+Copy lineup URL
+`);
+  assert.deepEqual(
+    players.map((p) => [p.name, p.group]),
+    [
+      ["Bremer", "out"],
+      ["Jhon Lucumí", "out"],
     ],
   );
 });

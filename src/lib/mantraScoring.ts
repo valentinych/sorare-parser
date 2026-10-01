@@ -30,7 +30,7 @@ export const MANTRA_SCORING = {
 } as const;
 
 /** Bump when scorePlayer rules change so persisted live scores cannot serve old totals. */
-export const MANTRA_SCORE_RULES_VERSION = "cs-on-pitch";
+export const MANTRA_SCORE_RULES_VERSION = "gk-pen-save-v2";
 
 export const DEFENCE_BONUS_THRESHOLDS: Array<[number, number]> = [
   [8.0, 5],

@@ -36,6 +36,15 @@ const CHAMPIONSHIP_DIVISIONS: MantraDivisionDef[] = [
   { leagueId: 657, division: "C1", name: "Derry", tourId: 20126 },
 ];
 
+/** Season 26-27 England 3 Div (tournament 26). A1/B1 not published yet. */
+const LEAGUE_ONE_DIVISIONS: MantraDivisionDef[] = [
+  { leagueId: 795, division: "C1", name: "Winchester" },
+  { leagueId: 796, division: "C2", name: "Salisbury" },
+  { leagueId: 797, division: "C3", name: "Carlisle" },
+  { leagueId: 798, division: "C4", name: "Hereford" },
+  { leagueId: 799, division: "C5", name: "Chichester" },
+];
+
 /** Season 26-27 Serie A fantasy divisions (tournament_id = 1). */
 const SERIE_A_DIVISIONS: MantraDivisionDef[] = [
   { leagueId: 742, division: "A1", name: "Rome" },
@@ -132,6 +141,138 @@ const PREMIER_LEAGUE_DIVISIONS: MantraDivisionDef[] = [
   { leagueId: 786, division: "", name: "Bournemouth", tourId: 24903 },
 ];
 
+const LIGUE_1_DIVISIONS: MantraDivisionDef[] = [
+  { leagueId: 732, division: "A1", name: "Paris" },
+  { leagueId: 733, division: "A2", name: "Marseille" },
+  { leagueId: 734, division: "B1", name: "Lyon" },
+  { leagueId: 735, division: "B2", name: "Toulouse" },
+  { leagueId: 736, division: "B3", name: "Nice" },
+  { leagueId: 737, division: "B4", name: "Nantes" },
+  { leagueId: 738, division: "C1", name: "Strasbourg" },
+  { leagueId: 739, division: "C2", name: "Montpellier" },
+  { leagueId: 740, division: "C3", name: "Bordeaux" },
+];
+
+const LA_LIGA_DIVISIONS: MantraDivisionDef[] = [
+  { leagueId: 664, division: "A1", name: "Madrid" },
+  { leagueId: 665, division: "A2", name: "Barcelona" },
+  { leagueId: 666, division: "B1", name: "Valencia" },
+  { leagueId: 667, division: "B2", name: "Sevilla" },
+  { leagueId: 668, division: "B3", name: "Zaragoza" },
+  { leagueId: 669, division: "B4", name: "Málaga" },
+  { leagueId: 670, division: "C1", name: "Murcia" },
+  { leagueId: 671, division: "C2", name: "Mallorca" },
+  { leagueId: 672, division: "C3", name: "Las Palmas" },
+  { leagueId: 673, division: "C4", name: "Bilbao" },
+  { leagueId: 674, division: "C5", name: "Alicante" },
+  { leagueId: 675, division: "C6", name: "Cordoba" },
+  { leagueId: 678, division: "D1", name: "Valladolid" },
+  { leagueId: 679, division: "D2", name: "Vigo" },
+  { leagueId: 680, division: "D3", name: "Gijon" },
+  { leagueId: 681, division: "D4", name: "Hospitalet" },
+  { leagueId: 682, division: "D5", name: "Granada" },
+  { leagueId: 683, division: "D6", name: "Elche" },
+  { leagueId: 791, division: "D7", name: "San Sebastián" },
+  { leagueId: 702, division: "", name: "La Coruña" },
+];
+
+const EREDIVISIE_DIVISIONS: MantraDivisionDef[] = [
+  { leagueId: 634, division: "A1", name: "Amsterdam" },
+  { leagueId: 635, division: "B1", name: "Rotterdam" },
+  { leagueId: 636, division: "B2", name: "Den Haag" },
+  { leagueId: 637, division: "C1", name: "Eindhoven" },
+  { leagueId: 638, division: "C2", name: "Utrecht" },
+];
+
+const JUPILER_DIVISIONS: MantraDivisionDef[] = [
+  { leagueId: 641, division: "A1", name: "Brussels" },
+  { leagueId: 642, division: "B1", name: "Antwerp" },
+  { leagueId: 643, division: "B2", name: "Ghent" },
+  { leagueId: 650, division: "C1", name: "Charleroi" },
+];
+
+const PRIMEIRA_LIGA_DIVISIONS: MantraDivisionDef[] = [
+  { leagueId: 645, division: "A1", name: "Lisbon" },
+  { leagueId: 647, division: "B1", name: "Porto" },
+  { leagueId: 648, division: "B2", name: "Braga" },
+  { leagueId: 649, division: "C1", name: "Amadora" },
+];
+
+const UPL_DIVISIONS: MantraDivisionDef[] = [
+  { leagueId: 587, division: "A1", name: "Kyiv" },
+  { leagueId: 588, division: "A2", name: "Kharkiv" },
+  { leagueId: 589, division: "B1", name: "Odesa" },
+  { leagueId: 590, division: "B2", name: "Dnipro" },
+  { leagueId: 591, division: "B3", name: "Donetsk" },
+  { leagueId: 592, division: "B4", name: "Lviv" },
+  { leagueId: 593, division: "C1", name: "Zaporizhzhia" },
+  { leagueId: 594, division: "C2", name: "Kryvyi Rih" },
+  { leagueId: 595, division: "C3", name: "Sevastopol" },
+  { leagueId: 596, division: "C4", name: "Mykolaiv" },
+  { leagueId: 597, division: "C5", name: "Mariupol" },
+  { leagueId: 598, division: "C6", name: "Luhansk" },
+  { leagueId: 599, division: "D1", name: "Vinnytsia" },
+  { leagueId: 600, division: "D2", name: "Simferopol" },
+  { leagueId: 601, division: "D3", name: "Chernihiv" },
+  { leagueId: 602, division: "D4", name: "Poltava" },
+  { leagueId: 603, division: "D5", name: "Kherson" },
+  { leagueId: 604, division: "D6", name: "Khmelnytskyi" },
+  { leagueId: 605, division: "D7", name: "Cherkasy" },
+  { leagueId: 606, division: "D8", name: "Zhytomyr" },
+  { leagueId: 630, division: "D9", name: "Sumy" },
+  { leagueId: 640, division: "E1", name: "Kropyvnytskyi" },
+  { leagueId: 607, division: "", name: "Mala Tokmachka" },
+  { leagueId: 608, division: "", name: "TTT A1" },
+  { leagueId: 609, division: "", name: "TTT A2" },
+  { leagueId: 610, division: "", name: "TTT B1" },
+  { leagueId: 611, division: "", name: "TTT B2" },
+  { leagueId: 612, division: "", name: "TTT B3" },
+  { leagueId: 613, division: "", name: "TTT B4" },
+  { leagueId: 614, division: "", name: "TTT C1" },
+  { leagueId: 615, division: "", name: "TTT C2" },
+  { leagueId: 616, division: "", name: "TTT C3" },
+  { leagueId: 617, division: "", name: "TTT C4" },
+  { leagueId: 618, division: "", name: "TTT C5" },
+  { leagueId: 619, division: "", name: "TTT C6" },
+  { leagueId: 620, division: "", name: "TTT D1" },
+  { leagueId: 621, division: "", name: "TTT D2" },
+  { leagueId: 622, division: "", name: "Zolochiv" },
+  { leagueId: 623, division: "", name: "Rivne" },
+  { leagueId: 624, division: "", name: "Chernivtsi" },
+  { leagueId: 625, division: "", name: "Ivano-Frankivsk" },
+  { leagueId: 626, division: "", name: "Lutsk" },
+  { leagueId: 627, division: "", name: "Ternopil" },
+  { leagueId: 628, division: "", name: "Trostyanets" },
+  { leagueId: 629, division: "", name: "Sobolivka" },
+  { leagueId: 631, division: "", name: "Kamyanske" },
+  { leagueId: 632, division: "", name: "TTT D3" },
+  { leagueId: 633, division: "", name: "Zalishchyky" },
+  { leagueId: 639, division: "", name: "Reni" },
+  { leagueId: 644, division: "", name: "Melitopol" },
+  { leagueId: 646, division: "", name: "TTT D4" },
+  { leagueId: 676, division: "", name: "Kerch" },
+];
+
+const MLS_DIVISIONS: MantraDivisionDef[] = [
+  { leagueId: 551, division: "A1", name: "New York" },
+  { leagueId: 552, division: "A2", name: "Los Angeles" },
+  { leagueId: 553, division: "B1", name: "Chicago" },
+  { leagueId: 554, division: "B2", name: "Houston" },
+  { leagueId: 555, division: "B3", name: "Phoenix" },
+  { leagueId: 556, division: "B4", name: "Philadelphia" },
+  { leagueId: 557, division: "C1", name: "San Antonio" },
+  { leagueId: 558, division: "C2", name: "San Diego" },
+  { leagueId: 559, division: "", name: "Jacksonville" },
+];
+
+const BRASILEIRAO_DIVISIONS: MantraDivisionDef[] = [
+  { leagueId: 545, division: "A1", name: "São Paulo" },
+  { leagueId: 546, division: "B1", name: "Rio de Janeiro" },
+  { leagueId: 547, division: "B2", name: "Brasília" },
+  { leagueId: 548, division: "C1", name: "Fortaleza" },
+  { leagueId: 549, division: "C2", name: "Salvador" },
+];
+
 function withLive(
   afId: number,
   fotmobLeagueId: number,
@@ -155,20 +296,125 @@ export const LIVE_LEAGUES: Record<string, LiveLeagueDef> = {
   "super-lig": withLive(203, 71, SUPER_LIG_DIVISIONS),
 };
 
+/**
+ * Extra Mantra championships on /tables only.
+ * Keep them off Live poller / tours --all so existing 6 leagues stay untouched.
+ */
+export const TABLES_EXTRA_LEAGUES: Record<string, LiveLeagueDef> = {
+  "ligue-1": withLive(61, 53, LIGUE_1_DIVISIONS),
+  "la-liga": withLive(140, 87, LA_LIGA_DIVISIONS),
+  eredivisie: withLive(88, 57, EREDIVISIE_DIVISIONS),
+  "jupiler-pro-league": withLive(144, 40, JUPILER_DIVISIONS),
+  "primeira-liga": withLive(94, 61, PRIMEIRA_LIGA_DIVISIONS),
+  upl: withLive(333, 441, UPL_DIVISIONS),
+  mls: withLive(253, 130, MLS_DIVISIONS),
+  brasileirao: withLive(71, 268, BRASILEIRAO_DIVISIONS),
+};
+
+export const TABLES_EXTRA_SLUGS = [
+  "ligue-1",
+  "la-liga",
+  "eredivisie",
+  "jupiler-pro-league",
+  "primeira-liga",
+  "upl",
+  "mls",
+  "brasileirao",
+] as const;
+
+/**
+ * Extra championships on Premium (unpicked tops / squad tools).
+ * Keep them off Live poller and /tables so existing dashboards stay untouched.
+ */
+export const PREMIUM_EXTRA_LEAGUES: Record<string, LiveLeagueDef> = {
+  "league-one": withLive(41, 108, LEAGUE_ONE_DIVISIONS),
+};
+
+/** Country flag emoji for /tables manager league column (🇫🇷 C1). */
+const LEAGUE_FLAG_EMOJI: Record<string, string> = {
+  ekstraklasa: "🇵🇱",
+  "serie-a": "🇮🇹",
+  bundesliga: "🇩🇪",
+  "premier-league": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+  championship: "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+  "league-one": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+  "super-lig": "🇹🇷",
+  "ligue-1": "🇫🇷",
+  "la-liga": "🇪🇸",
+  eredivisie: "🇳🇱",
+  "jupiler-pro-league": "🇧🇪",
+  "primeira-liga": "🇵🇹",
+  upl: "🇺🇦",
+  mls: "🇺🇸",
+  brasileirao: "🇧🇷",
+};
+
+export function leagueFlagEmoji(slug: string | null | undefined): string {
+  const key = String(slug || "")
+    .trim()
+    .toLowerCase();
+  return LEAGUE_FLAG_EMOJI[key] ?? "";
+}
+
 export const DEFAULT_LIVE_SLUG = "ekstraklasa";
 
 export function allLiveLeagues(): LiveLeagueDef[] {
   return Object.values(LIVE_LEAGUES);
 }
 
+export function allTablesLeagues(): LiveLeagueDef[] {
+  return [
+    ...allLiveLeagues(),
+    ...TABLES_EXTRA_SLUGS.map((slug) => TABLES_EXTRA_LEAGUES[slug]!),
+  ];
+}
+
+export function allPremiumExtraLeagues(): LiveLeagueDef[] {
+  return Object.values(PREMIUM_EXTRA_LEAGUES);
+}
+
+/** Live 6 + /tables extras + Premium-only England 3. Squad Builder catalog. */
+export function allBuilderLeagues(): LiveLeagueDef[] {
+  return [...allTablesLeagues(), ...allPremiumExtraLeagues()];
+}
+
+/** Live 6 + Premium-only extras (not /tables extras). */
+export function allPremiumLeagues(): LiveLeagueDef[] {
+  return [...allLiveLeagues(), ...allPremiumExtraLeagues()];
+}
+
+/** Division rows when `mantra_leagues` is empty — ids from LIVE/TABLES/PREMIUM catalogs only. */
+export function catalogDivisionsForTournament(
+  tournamentId: number | null | undefined,
+): Array<{ id: number; name: string; division: string }> {
+  if (tournamentId == null || !Number.isFinite(tournamentId)) return [];
+  const league = allBuilderLeagues().find((item) => item.mantraTournamentId === tournamentId);
+  return (league?.mantraDivisions ?? []).map((d) => ({
+    id: d.leagueId,
+    name: d.name,
+    division: d.division,
+  }));
+}
+
+export function isTablesExtraSlug(slug: string | null | undefined): boolean {
+  const key = String(slug || "")
+    .trim()
+    .toLowerCase();
+  return Boolean(key && TABLES_EXTRA_LEAGUES[key]);
+}
+
 export function liveLeagueBySlug(slug: string | null | undefined): LiveLeagueDef | null {
   if (!slug) return null;
   const key = String(slug).trim().toLowerCase();
   if (LIVE_LEAGUES[key]) return LIVE_LEAGUES[key]!;
+  if (TABLES_EXTRA_LEAGUES[key]) return TABLES_EXTRA_LEAGUES[key]!;
+  if (PREMIUM_EXTRA_LEAGUES[key]) return PREMIUM_EXTRA_LEAGUES[key]!;
   // Accept TM codes / display-name slugs via AF registry.
   const af = leagueBySlug(key);
   if (af && LIVE_LEAGUES[af.slug]) return LIVE_LEAGUES[af.slug]!;
-  const byTm = Object.values(LIVE_LEAGUES).find(
+  if (af && TABLES_EXTRA_LEAGUES[af.slug]) return TABLES_EXTRA_LEAGUES[af.slug]!;
+  if (af && PREMIUM_EXTRA_LEAGUES[af.slug]) return PREMIUM_EXTRA_LEAGUES[af.slug]!;
+  const byTm = allBuilderLeagues().find(
     (l) => l.tmCompetition.toLowerCase() === key || l.tmCompetition === slug,
   );
   return byTm ?? null;
@@ -179,7 +425,9 @@ export function resolveLiveLeague(param?: string | null): LiveLeagueDef {
 }
 
 export function liveLeagueByFotmobId(fotmobId: number): LiveLeagueDef | null {
-  return Object.values(LIVE_LEAGUES).find((l) => l.fotmobLeagueId === fotmobId) ?? null;
+  return (
+    allBuilderLeagues().find((l) => l.fotmobLeagueId === fotmobId) ?? null
+  );
 }
 
 /** Legacy Ekstraklasa meta keys stay unscoped so existing DB/files keep working. */

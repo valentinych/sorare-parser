@@ -68,6 +68,17 @@ async function main(): Promise<void> {
   startLivePoller();
   if (process.env.SORARE_POLLER !== "0") startSorarePoller();
 
+  setTimeout(() => {
+    void import("../sync/syncMantraManagers.js")
+      .then(({ syncMantraManagerNicknames }) => syncMantraManagerNicknames())
+      .catch((err) => {
+        console.warn(
+          "mantra nicknames boot failed:",
+          err instanceof Error ? err.message : err,
+        );
+      });
+  }, 20_000);
+
   // AF runs on the same 5m cadence, outside FotMob/Mantra locks.
   setTimeout(() => {
     void runAfPollGuarded("boot").catch((err) => {

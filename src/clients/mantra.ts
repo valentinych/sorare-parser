@@ -105,24 +105,41 @@ function parseListPlayer(raw: Json): MantraListPlayer {
   };
 }
 
+function parseMantraLeague(raw: Json, tournamentId: number): MantraLeague | null {
+  const id = Number(raw.id);
+  if (!Number.isSafeInteger(id) || id <= 0) return null;
+  return {
+    id,
+    name: String(raw.name ?? ""),
+    division: raw.division != null ? String(raw.division) : "",
+    divisionId: raw.division_id != null ? Number(raw.division_id) : null,
+    seasonId: raw.season_id != null ? Number(raw.season_id) : null,
+    status: raw.status != null ? String(raw.status) : null,
+    tournamentId,
+  };
+}
+
 export async function fetchMantraLeagues(tournamentId: number): Promise<MantraLeague[]> {
-  const data = await mantraGet("/leagues", {
-    "filter[tournament_id]": tournamentId,
-    "page[size]": 50,
-    "page[number]": 1,
-  });
-  const list = Array.isArray(data.data) ? (data.data as Json[]) : [];
-  return list
-    .map((raw) => ({
-      id: Number(raw.id),
-      name: String(raw.name ?? ""),
-      division: String(raw.division ?? ""),
-      divisionId: raw.division_id != null ? Number(raw.division_id) : null,
-      seasonId: raw.season_id != null ? Number(raw.season_id) : null,
-      status: raw.status != null ? String(raw.status) : null,
-      tournamentId,
-    }))
-    .filter((l) => l.status === "active");
+  const out: MantraLeague[] = [];
+  let pageNumber = 1;
+  let totalPages = 1;
+  do {
+    const data = await mantraGet("/leagues", {
+      "filter[tournament_id]": tournamentId,
+      "page[size]": 50,
+      "page[number]": pageNumber,
+    });
+    const list = Array.isArray(data.data) ? (data.data as Json[]) : [];
+    for (const raw of list) {
+      const row = parseMantraLeague(raw, tournamentId);
+      if (row) out.push(row);
+    }
+    const meta = (data.meta ?? {}) as Json;
+    const page = (meta.page ?? {}) as Json;
+    totalPages = Math.max(1, Number(page.total_pages ?? 1) || 1);
+    pageNumber += 1;
+  } while (pageNumber <= totalPages);
+  return out.filter((l) => l.status === "active");
 }
 
 export async function fetchMantraPlayersPage(
@@ -175,6 +192,12 @@ export async function fetchMantraProfile(playerId: number): Promise<MantraProfil
     nationality: raw.nationality != null ? String(raw.nationality) : null,
     number: raw.number != null ? Number(raw.number) : null,
   };
+}
+
+/** Raw Mantra standings payload for one fantasy league (`/leagues/:id/results`). */
+export async function fetchLeagueResults(leagueId: number): Promise<unknown> {
+  const data = await mantraGet(`/leagues/${leagueId}/results`);
+  return data.data ?? data;
 }
 
 export async function fetchLeagueTeams(leagueId: number): Promise<MantraFantasyTeamSummary[]> {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { scorePlayer, type PlayerMatchStats } from "./mantraScoring.js";
+import { fantasyGoalsFromTeamScore, scorePlayer, type PlayerMatchStats } from "./mantraScoring.js";
 
 function stats(over: Partial<PlayerMatchStats> = {}): PlayerMatchStats {
   return {
@@ -98,4 +98,17 @@ test("CS uses Dream Team slot, not only native: DM/AM in AM has no CS", () => {
     teamCleanSheet: true,
   });
   assert.ok(!amInAmFw?.events.some((e) => e.key === "cs"));
+});
+
+test("fantasyGoalsFromTeamScore is 72 for 1 goal, then +7 (Mantra match scoreline)", () => {
+  assert.equal(fantasyGoalsFromTeamScore(71.99), 0);
+  assert.equal(fantasyGoalsFromTeamScore(72), 1);
+  assert.equal(fantasyGoalsFromTeamScore(78.99), 1);
+  assert.equal(fantasyGoalsFromTeamScore(79), 2);
+  assert.equal(fantasyGoalsFromTeamScore(84.9), 2);
+  assert.equal(fantasyGoalsFromTeamScore(83.9), 2);
+  assert.equal(fantasyGoalsFromTeamScore(86.5), 3);
+  assert.equal(fantasyGoalsFromTeamScore(94.39), 4);
+  assert.equal(fantasyGoalsFromTeamScore(98.98), 4);
+  assert.equal(fantasyGoalsFromTeamScore(88.73), 3);
 });

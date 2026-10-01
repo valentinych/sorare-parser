@@ -1,8 +1,8 @@
 /**
  * Sync league fixtures + bookmaker odds from API-Football.
  * Markets: Match Winner (1x2), Clean Sheet H/A, Team Score a Goal H/A,
- * Exact Score (most likely score = shortest odds).
- * Player anytime scorer (bet 92) is not offered for Ekstraklasa — see parse notes.
+ * Exact Score (most likely + top-3 = shortest odds),
+ * Anytime Goal Scorer (bet 92; optional Home/Away 231/218 for side tags).
  * Uses shared rateLimit4perSec (≤4 req/s).
  */
 import * as af from "../clients/apiFootball.js";
@@ -33,6 +33,18 @@ export type ParsedOdds = {
   awayScoreProb: number | null;
   /** Most likely Exact Score, e.g. "2:0". */
   popularScore: string | null;
+  /** Top Exact Score outcomes (shortest odds), with de-vigged probs. */
+  topScores: Array<{ score: string; prob: number }> | null;
+  /**
+   * Anytime Goal Scorer (AF bet 92). Raw implied P = 1/odd (not de-vigged;
+   * multiple players can score). Optional side from Home/Away markets 231/218.
+   */
+  anytimeScorers: Array<{
+    name: string;
+    odd: number;
+    prob: number;
+    side?: "home" | "away";
+  }> | null;
 };
 
 /** Implied probs from decimal odds, de-vigged to sum=1. */
@@ -96,25 +108,93 @@ function normalizeExactScore(value: string): string | null {
   return match ? `${match[1]}:${match[2]}` : null;
 }
 
-/** Shortest-odds Exact Score outcome, skipping "any other score" buckets. */
-export function popularScoreFromBet(
+/** Exact Score rows sorted by shortest odds (most likely), skipping buckets. */
+export function topScoresFromBet(
   bet: af.AfOddsBookmaker["bets"][number] | undefined,
-): string | null {
+  limit = 3,
+): Array<{ score: string; odd: number; prob: number }> | null {
   if (!bet) return null;
-  let best: { score: string; odd: number } | null = null;
+  const rows: Array<{ score: string; odd: number; implied: number }> = [];
   for (const row of bet.values) {
     const score = normalizeExactScore(String(row.value ?? ""));
     const odd = Number(row.odd);
     if (!score || !Number.isFinite(odd) || odd <= 1) continue;
-    if (!best || odd < best.odd) best = { score, odd };
+    rows.push({ score, odd, implied: 1 / odd });
   }
-  return best?.score ?? null;
+  if (!rows.length) return null;
+  const sum = rows.reduce((acc, r) => acc + r.implied, 0);
+  rows.sort((a, b) => a.odd - b.odd || b.implied - a.implied);
+  return rows.slice(0, Math.max(1, limit)).map((r) => ({
+    score: r.score,
+    odd: r.odd,
+    prob: Number((r.implied / sum).toFixed(4)),
+  }));
+}
+
+/** Shortest-odds Exact Score outcome, skipping "any other score" buckets. */
+export function popularScoreFromBet(
+  bet: af.AfOddsBookmaker["bets"][number] | undefined,
+): string | null {
+  return topScoresFromBet(bet, 1)?.[0]?.score ?? null;
+}
+
+export type AnytimeScorerRow = {
+  name: string;
+  odd: number;
+  prob: number;
+  side?: "home" | "away";
+};
+
+/**
+ * AF bet 92 (Anytime Goal Scorer): player name → decimal odd.
+ * Prob = raw 1/odd (do not de-vig across players — several can score).
+ * Optional side map from Home (231) / Away (218) anytime markets.
+ */
+export function anytimeScorersFromBet(
+  bet: af.AfOddsBookmaker["bets"][number] | undefined,
+  sideByName?: Map<string, "home" | "away">,
+  limit = 40,
+): AnytimeScorerRow[] | null {
+  if (!bet) return null;
+  const rows: AnytimeScorerRow[] = [];
+  for (const row of bet.values) {
+    const name = String(row.value ?? "").trim();
+    const odd = Number(row.odd);
+    if (!name || !Number.isFinite(odd) || odd <= 1) continue;
+    const side = sideByName?.get(name.toLowerCase());
+    const entry: AnytimeScorerRow = {
+      name,
+      odd,
+      prob: Number((1 / odd).toFixed(4)),
+    };
+    if (side) entry.side = side;
+    rows.push(entry);
+  }
+  if (!rows.length) return null;
+  rows.sort((a, b) => b.prob - a.prob || a.odd - b.odd || a.name.localeCompare(b.name));
+  return rows.slice(0, Math.max(1, limit));
+}
+
+function sideMapFromHomeAwayBets(
+  homeBet: af.AfOddsBookmaker["bets"][number] | undefined,
+  awayBet: af.AfOddsBookmaker["bets"][number] | undefined,
+): Map<string, "home" | "away"> {
+  const map = new Map<string, "home" | "away">();
+  for (const row of homeBet?.values ?? []) {
+    const name = String(row.value ?? "").trim().toLowerCase();
+    if (name) map.set(name, "home");
+  }
+  for (const row of awayBet?.values ?? []) {
+    const name = String(row.value ?? "").trim().toLowerCase();
+    if (name) map.set(name, "away");
+  }
+  return map;
 }
 
 /**
- * Parse 1x2 + team CS + team-to-score from one bookmaker payload.
- * Gap: Anytime Goal Scorer (bet 92) is not present for Ekstraklasa fixtures;
- * attackers use Home/Away Team Score a Goal (43/44) as P(team scores).
+ * Parse 1x2 + team CS + team-to-score + exact + anytime scorers.
+ * Anytime Goal Scorer (bet 92) is often missing for smaller leagues (e.g. Ekstraklasa);
+ * attackers then rely on Home/Away Team Score a Goal (43/44) as P(team scores).
  */
 export function parseFixtureOdds(bookmakers: af.AfOddsBookmaker[]): ParsedOdds | null {
   const bm = pickBookmaker(bookmakers);
@@ -150,23 +230,66 @@ export function parseFixtureOdds(bookmakers: af.AfOddsBookmaker[]): ParsedOdds |
   const homeScore = findYesNo(43, "Home Team Score a Goal");
   const awayScore = findYesNo(44, "Away Team Score a Goal");
 
-  const findPopularScore = () => {
-    const local = popularScoreFromBet(betByIdOrName(bm, 10, "Exact Score"));
-    if (local) return local;
+  const findTopScores = () => {
+    const local = topScoresFromBet(betByIdOrName(bm, 10, "Exact Score"), 3);
+    if (local?.length) return local;
     for (const idPref of PREFERRED_BOOKMAKER_IDS) {
       const other = bookmakers.find((b) => b.id === idPref);
       if (!other || other.id === bm.id) continue;
-      const hit = popularScoreFromBet(betByIdOrName(other, 10, "Exact Score"));
-      if (hit) return hit;
+      const hit = topScoresFromBet(betByIdOrName(other, 10, "Exact Score"), 3);
+      if (hit?.length) return hit;
     }
     for (const other of bookmakers) {
       if (other.id === bm.id) continue;
-      const hit = popularScoreFromBet(betByIdOrName(other, 10, "Exact Score"));
-      if (hit) return hit;
+      const hit = topScoresFromBet(betByIdOrName(other, 10, "Exact Score"), 3);
+      if (hit?.length) return hit;
     }
     return null;
   };
 
+  const topScores = findTopScores();
+
+  const findAnytimeScorers = () => {
+    const fromBm = (b: af.AfOddsBookmaker) => {
+      const sides = sideMapFromHomeAwayBets(
+        betByIdOrName(b, 231, "Home Anytime Goal Scorer"),
+        betByIdOrName(b, 218, "Away Anytime Goal Scorer"),
+      );
+      const unified = anytimeScorersFromBet(
+        betByIdOrName(b, 92, "Anytime Goal Scorer"),
+        sides.size ? sides : undefined,
+      );
+      if (unified?.length) return unified;
+      // Fall back to merging Home + Away markets when unified bet 92 is absent.
+      if (!sides.size) return null;
+      const merged: af.AfOddsBookmaker["bets"][number] = {
+        id: 92,
+        name: "Anytime Goal Scorer",
+        values: [
+          ...(betByIdOrName(b, 231, "Home Anytime Goal Scorer")?.values ?? []),
+          ...(betByIdOrName(b, 218, "Away Anytime Goal Scorer")?.values ?? []),
+        ],
+      };
+      return anytimeScorersFromBet(merged, sides);
+    };
+
+    const local = fromBm(bm);
+    if (local?.length) return local;
+    for (const idPref of PREFERRED_BOOKMAKER_IDS) {
+      const other = bookmakers.find((b) => b.id === idPref);
+      if (!other || other.id === bm.id) continue;
+      const hit = fromBm(other);
+      if (hit?.length) return hit;
+    }
+    for (const other of bookmakers) {
+      if (other.id === bm.id) continue;
+      const hit = fromBm(other);
+      if (hit?.length) return hit;
+    }
+    return null;
+  };
+
+  const anytimeScorers = findAnytimeScorers();
   return {
     home,
     draw,
@@ -181,7 +304,9 @@ export function parseFixtureOdds(bookmakers: af.AfOddsBookmaker[]): ParsedOdds |
     awayScoreOdd: awayScore?.odd ?? null,
     homeScoreProb: homeScore?.prob ?? null,
     awayScoreProb: awayScore?.prob ?? null,
-    popularScore: findPopularScore(),
+    popularScore: topScores?.[0]?.score ?? null,
+    topScores: topScores?.map(({ score, prob }) => ({ score, prob })) ?? null,
+    anytimeScorers,
   };
 }
 
@@ -199,6 +324,7 @@ export async function syncLeagueFixturesAndOdds(
   withCs: number;
   withScore: number;
   withPopularScore: number;
+  withAnytimeScorers: number;
 }> {
   const db = getDb();
   const now = new Date().toISOString();
@@ -240,7 +366,7 @@ export async function syncLeagueFixturesAndOdds(
   fxTx(fxRes.response ?? []);
   console.log(`  fixtures: ${fxRes.response?.length ?? 0}`);
 
-  console.log(`AF odds (1x2+CS+team score+exact) league=${leagueId} season=${season}…`);
+  console.log(`AF odds (1x2+CS+team score+exact+anytime) league=${leagueId} season=${season}…`);
   const oddsRows = await af.oddsForLeague(leagueId, season);
   const upsertOdds = db.prepare(
     `INSERT INTO fixture_odds (
@@ -249,14 +375,14 @@ export async function syncLeagueFixturesAndOdds(
        home_win_prob, draw_prob, away_win_prob,
        home_cs_odd, away_cs_odd, home_cs_prob, away_cs_prob,
        home_score_odd, away_score_odd, home_score_prob, away_score_prob,
-       popular_score, synced_at
+       popular_score, top_scores, anytime_scorers, synced_at
      ) VALUES (
        @fixture_id, @league_id, @season, @kickoff,
        @home_odd, @draw_odd, @away_odd, @bookmaker,
        @home_win_prob, @draw_prob, @away_win_prob,
        @home_cs_odd, @away_cs_odd, @home_cs_prob, @away_cs_prob,
        @home_score_odd, @away_score_odd, @home_score_prob, @away_score_prob,
-       @popular_score, @synced_at
+       @popular_score, @top_scores, @anytime_scorers, @synced_at
      )
      ON CONFLICT(fixture_id) DO UPDATE SET
        league_id = excluded.league_id,
@@ -278,6 +404,8 @@ export async function syncLeagueFixturesAndOdds(
        home_score_prob = excluded.home_score_prob,
        away_score_prob = excluded.away_score_prob,
        popular_score = excluded.popular_score,
+       top_scores = excluded.top_scores,
+       anytime_scorers = excluded.anytime_scorers,
        synced_at = excluded.synced_at`,
   );
 
@@ -285,6 +413,7 @@ export async function syncLeagueFixturesAndOdds(
   let withCs = 0;
   let withScore = 0;
   let withPopularScore = 0;
+  let withAnytimeScorers = 0;
   const oddsTx = db.transaction((rows: af.AfOddsRow[]) => {
     for (const r of rows) {
       const parsed = parseFixtureOdds(r.bookmakers ?? []);
@@ -310,17 +439,22 @@ export async function syncLeagueFixturesAndOdds(
         home_score_prob: parsed.homeScoreProb,
         away_score_prob: parsed.awayScoreProb,
         popular_score: parsed.popularScore,
+        top_scores: parsed.topScores ? JSON.stringify(parsed.topScores) : null,
+        anytime_scorers: parsed.anytimeScorers
+          ? JSON.stringify(parsed.anytimeScorers)
+          : null,
         synced_at: now,
       });
       oddsN++;
       if (parsed.homeCsProb != null || parsed.awayCsProb != null) withCs++;
       if (parsed.homeScoreProb != null || parsed.awayScoreProb != null) withScore++;
       if (parsed.popularScore) withPopularScore++;
+      if (parsed.anytimeScorers?.length) withAnytimeScorers++;
     }
   });
   oddsTx(oddsRows);
   console.log(
-    `  odds: ${oddsN}/${oddsRows.length} (CS ${withCs}, team-score ${withScore}, exact ${withPopularScore})`,
+    `  odds: ${oddsN}/${oddsRows.length} (CS ${withCs}, team-score ${withScore}, exact ${withPopularScore}, anytime ${withAnytimeScorers})`,
   );
 
   setMeta(`fixtures_${leagueId}_${season}`, String(fxRes.response?.length ?? 0));
@@ -332,5 +466,6 @@ export async function syncLeagueFixturesAndOdds(
     withCs,
     withScore,
     withPopularScore,
+    withAnytimeScorers,
   };
 }

@@ -858,6 +858,37 @@ export function listFantasyTeams(opts: {
   }));
 }
 
+const MANTRA_IMAGE_ORIGIN = "https://mantrafootball.s3.eu-west-1.amazonaws.com";
+const MANTRA_IMAGE_PATHS = [
+  "/player_avatars/",
+  "/club_logo/",
+  "/teams/",
+  "/user_logos/",
+];
+
+/** Same-origin proxy URL for mantrafootball S3 photos; null if the path is missing or not Mantra. */
+export function squadBuilderImageUrl(path: string | null | undefined): string | null {
+  if (typeof path !== "string" || !path.trim()) return null;
+  const trimmed = path.trim();
+  if (trimmed.startsWith("/mantra/image")) return trimmed;
+  try {
+    const url = new URL(trimmed, `${MANTRA_IMAGE_ORIGIN}/`);
+    if (
+      url.protocol !== "https:" ||
+      url.hostname !== "mantrafootball.s3.eu-west-1.amazonaws.com" ||
+      url.port ||
+      url.username ||
+      url.password ||
+      !MANTRA_IMAGE_PATHS.some((prefix) => url.pathname.startsWith(prefix))
+    ) {
+      return null;
+    }
+    return `/mantra/image?url=${encodeURIComponent(url.toString())}`;
+  } catch {
+    return null;
+  }
+}
+
 export function getSquadBuilderTeamView(
   fantasyTeamId: number,
 ): SquadBuilderTeamView | null {
@@ -921,8 +952,8 @@ export function getSquadBuilderTeamView(
           clubName: player.club_name || "",
           positions: parseJsonArray(player.positions_json),
           positionsItal: parseJsonArray(player.positions_ital_json),
-          avatarPath: player.avatar_path,
-          clubLogo: player.club_logo,
+          avatarPath: squadBuilderImageUrl(player.avatar_path),
+          clubLogo: squadBuilderImageUrl(player.club_logo) ?? player.club_logo,
         },
       ];
     }),

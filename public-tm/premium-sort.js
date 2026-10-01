@@ -1,4 +1,5 @@
 const PREMIUM_SORT_KEYS = new Set([
+  "xiScore",
   "displayedPercentage",
   "footmopsPercentage",
   "winProbability",
@@ -24,8 +25,8 @@ function tieBreakPremiumRows(a, b) {
   );
 }
 
-export function sortPremiumRows(rows, sort) {
-  if (!sort || !PREMIUM_SORT_KEYS.has(sort.key)) return rows.slice();
+export function sortNumericRows(rows, sort) {
+  if (!sort?.key) return rows.slice();
   const direction = sort.dir === "asc" ? 1 : -1;
   return rows.slice().sort((a, b) => {
     const aValue = numericValue(a[sort.key]);
@@ -38,8 +39,18 @@ export function sortPremiumRows(rows, sort) {
   });
 }
 
-export function nextPremiumSort(current, key) {
-  if (!PREMIUM_SORT_KEYS.has(key)) return current;
+export function sortPremiumRows(rows, sort) {
+  if (!sort || !PREMIUM_SORT_KEYS.has(sort.key)) return rows.slice();
+  return sortNumericRows(rows, sort);
+}
+
+export function nextToggleSort(current, key) {
+  if (!key) return current;
   if (!current || current.key !== key) return { key, dir: "desc" };
   return { key, dir: current.dir === "desc" ? "asc" : "desc" };
+}
+
+export function nextPremiumSort(current, key) {
+  if (!PREMIUM_SORT_KEYS.has(key)) return current;
+  return nextToggleSort(current, key);
 }
