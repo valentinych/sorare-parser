@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("Live dropdown is driven by /live/leagues and the six slugs", async () => {
+test("Live dropdown is driven by /live/leagues and the full Builder set", async () => {
   const [app, html, i18n, core] = await Promise.all([
     readFile(new URL("../../public-tm/pages/live.js", import.meta.url), "utf8"),
     readFile(new URL("../../public-tm/index.html", import.meta.url), "utf8"),
@@ -19,21 +19,41 @@ test("Live dropdown is driven by /live/leagues and the six slugs", async () => {
   assert.match(app, /"ekstraklasa"/);
   assert.match(app, /"serie-a"/);
   assert.match(app, /"bundesliga"/);
+  assert.match(app, /"ligue-1"/);
+  assert.match(app, /"la-liga"/);
+  assert.match(app, /"eredivisie"/);
+  assert.match(app, /"jupiler-pro-league"/);
+  assert.match(app, /"primeira-liga"/);
+  assert.match(app, /"upl"/);
+  assert.match(app, /"mls"/);
+  assert.match(app, /"brasileirao"/);
+  assert.match(app, /"league-one"/);
   assert.match(app, /tmCompetition: "GB1"/);
   assert.match(app, /tmCompetition: "GB2"/);
+  assert.match(app, /tmCompetition: "GB3"/);
   assert.match(app, /tmCompetition: "TR1"/);
   assert.match(app, /tmCompetition: "PL1"/);
   assert.match(app, /tmCompetition: "IT1"/);
   assert.match(app, /tmCompetition: "L1"/);
+  assert.match(app, /tmCompetition: "FR1"/);
+  assert.match(app, /tmCompetition: "ES1"/);
   assert.match(i18n, /Премьер-лига/);
   assert.match(i18n, /Чемпионшип/);
   assert.match(i18n, /Суперлига/);
   assert.match(i18n, /Экстракласса/);
   assert.match(i18n, /Серия А/);
   assert.match(i18n, /Бундеслига/);
+  assert.match(i18n, /Лига 1/);
+  assert.match(i18n, /Ла Лига/);
+  assert.match(i18n, /Эредивизи/);
+  assert.match(i18n, /Про-лига/);
+  assert.match(i18n, /Примейра-лига/);
+  assert.match(i18n, /Бразилейран/);
   assert.match(core, /championship: "Чемпионшип"/);
   assert.match(core, /"serie-a": "Серия А"/);
   assert.match(core, /bundesliga: "Бундеслига"/);
+  assert.match(core, /"ligue-1": "Лига 1"/);
+  assert.match(core, /"league-one": "League One"/);
   assert.match(app, /liveClientTimer = setInterval/);
   assert.match(app, /5 \* 60 \* 1000/);
 });
@@ -47,6 +67,9 @@ test("Live league dropdown uses header Latin names and slug option values", asyn
   assert.match(app, /"Ekstraklasa"/);
   assert.match(app, /"Serie A"/);
   assert.match(app, /"Bundesliga"/);
+  assert.match(app, /"Ligue 1"/);
+  assert.match(app, /"La Liga"/);
+  assert.match(app, /"League One"/);
   assert.doesNotMatch(app, /Премьер-лига/);
   assert.doesNotMatch(app, /Чемпионшип/);
   assert.doesNotMatch(app, /leagueUiLabel/);
@@ -58,7 +81,35 @@ test("Live league dropdown uses header Latin names and slug option values", asyn
   const bind = app.slice(app.indexOf("function bindLivePage"), app.indexOf("export async function start"));
   assert.match(bind, /fetchLiveRound\(\{ silent: false \}\)/);
   assert.match(bind, /resolveCompetitionIdFromLeagueParam/);
-  assert.match(boot, /pages\/live\.js\?v=14/);
+  assert.match(boot, /pages\/live\.js\?v=21/);
+  assert.match(app, /Мои команды/);
+  assert.match(app, /\["live", "LIVE"\]/);
+  assert.match(app, /\["xi", "XI"\]/);
+  assert.match(app, /\["bench", "Запас"\]/);
+  assert.doesNotMatch(app, /Основа, сыграли/);
+  assert.doesNotMatch(app, /Основа, не сыграли/);
+  assert.match(app, /live-my-score \$\{chipClass\}/);
+  assert.match(app, /is-pending/);
+  assert.match(app, /is-unused/);
+  assert.match(app, /is-live/);
+  assert.match(app, /is-played/);
+  assert.match(app, /live-my-empty/);
+  assert.doesNotMatch(app, /<p class="live-empty">—<\/p>/);
+  assert.match(app, /scoreText/);
+  const listFn = app.slice(app.indexOf("function renderLiveList"), app.indexOf("function renderMyTeamPlayer"));
+  const mineBranch = listFn.slice(listFn.indexOf("if (liveMyTeamsMode)"), listFn.indexOf("if (!livePayload)"));
+  assert.match(mineBranch, /list\.innerHTML = ""/);
+  assert.match(mineBranch, /return/);
+  assert.doesNotMatch(mineBranch, /live-card/);
+  assert.match(app, /layout\.hidden = liveMyTeamsMode/);
+  assert.match(app, /detail\.hidden = true/);
+  assert.match(app, /function renderMantraPair/);
+  assert.match(app, /live-my-pairs/);
+  assert.match(app, /mantra-match-flag/);
+  assert.match(app, /renderMantraPair\(pair, calc, pair\)/);
+  const mineFn = app.slice(app.indexOf("function renderLiveMyTeams"), app.indexOf("async function loadLiveDetail"));
+  assert.match(mineFn, /LIVE игроки/);
+  assert.match(mineFn, /live-my-pairs/);
 });
 
 test("Live heading and round tabs use human names, not slugs or English Round N", async () => {

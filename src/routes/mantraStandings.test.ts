@@ -17,8 +17,8 @@ test("GET /tables serves the standings SPA view", async (t) => {
   assert.match(res.body, /data-page="tables"/);
   assert.match(res.body, /id="tables-progress"/);
   assert.match(res.body, /id="tables-progress-pct"/);
-  assert.match(res.body, /boot\.js\?v=77/);
-  assert.match(res.body, /styles\.css\?v=163/);
+  assert.match(res.body, /boot\.js\?v=85/);
+  assert.match(res.body, /styles\.css\?v=166/);
   assert.doesNotMatch(res.body, /id="view-live"/);
   assert.doesNotMatch(res.body, /id="league"/);
   assert.doesNotMatch(res.body, /<th>NEXT<\/th>/);

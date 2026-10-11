@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { getLiveMatch, listLiveRound } from "../domain/liveMatches.js";
+import { buildLiveMyTeams, LIVE_MY_TEAMS_SLUG } from "../domain/liveMyTeams.js";
 import { listFantasyTeams } from "../domain/managerTeam.js";
 import { wantsHtmlPage } from "../lib/wantsHtmlPage.js";
 import { isSpaReady, sendSpaPage } from "./spaPages.js";
@@ -177,6 +178,62 @@ function parseRoundQuery(q: unknown): string | null {
 function parseLeagueQuery(q: unknown): string {
   if (typeof q === "string" && q.trim()) return resolveLiveLeague(q.trim()).slug;
   return DEFAULT_LIVE_SLUG;
+}
+
+function isMyTeamsQuery(q: unknown): boolean {
+  return typeof q === "string" && q.trim().toLowerCase() === LIVE_MY_TEAMS_SLUG;
+}
+
+function buildMyTeamsPayload(req: FastifyRequest) {
+  const user = (() => {
+    try {
+      return currentUser(req);
+    } catch {
+      return null;
+    }
+  })();
+  const view = buildLiveMyTeams(getDb(), {
+    signedIn: Boolean(user),
+    managerId: user?.mantra_manager_id ?? null,
+  });
+  return {
+    round: null,
+    currentRound: null,
+    rounds: [],
+    syncedAt: null,
+    matches: view.matches,
+    league: LIVE_MY_TEAMS_SLUG,
+    leagueName: "Мои команды",
+    myTeams: {
+      status: view.status,
+      message: view.message,
+      columns: view.columns,
+      pairs: view.pairs,
+      computed: view.computed,
+    },
+    account: user
+      ? { pinMyLeagues: Boolean(user.pin_my_leagues), myLeagueIds: [] as number[] }
+      : null,
+    mantra: {
+      tours: [],
+      syncedAt: null,
+      error: null,
+      configured: true,
+      lineupsSyncedAt: null,
+      lineupsCount: 0,
+      lineupsRound: null,
+      computed: {},
+      dreamTeam: null,
+      idealStandings: null,
+    },
+    poll: {
+      intervalSec: POLL_MS / 1000,
+      running: false,
+      lastSync: null,
+      lastMantraSync: null,
+      lastError: null,
+    },
+  };
 }
 
 export async function runFotmobPoll(reason: string): Promise<LiveSyncResult[]> {
@@ -655,6 +712,7 @@ export async function liveRoutes(app: FastifyInstance) {
     }
     reply.header("Cache-Control", "no-store");
     reply.header("Vary", "Accept, Sec-Fetch-Dest");
+    if (isMyTeamsQuery(q.league)) return buildMyTeamsPayload(req);
     const round = parseRoundQuery(q.round);
     const league = parseLeagueQuery(q.league);
     kickFotmobRefreshIfStale(league);

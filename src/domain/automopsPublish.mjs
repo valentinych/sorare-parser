@@ -70,6 +70,18 @@ const EKSTRAKLASA_GW9_KICKOFFS = [
   { home: "Lech", away: "Radomiak", iso: "2026-09-20T20:15:00+02:00" },
 ];
 
+const EKSTRAKLASA_GW10_KICKOFFS = [
+  { home: "Wieczysta", away: "Wisla Plock", iso: "2026-10-09T18:00:00+02:00" },
+  { home: "Rakow", away: "GKS Katowice", iso: "2026-10-09T20:30:00+02:00" },
+  { home: "Cracovia", away: "Zaglebie", iso: "2026-10-10T14:45:00+02:00" },
+  { home: "Slask", away: "Lech", iso: "2026-10-10T17:30:00+02:00" },
+  { home: "Jagiellonia", away: "Gornik", iso: "2026-10-10T20:15:00+02:00" },
+  { home: "Piast", away: "Widzew", iso: "2026-10-11T14:45:00+02:00" },
+  { home: "Pogon", away: "Korona", iso: "2026-10-11T17:30:00+02:00" },
+  { home: "Legia", away: "Wisla Krakow", iso: "2026-10-11T20:15:00+02:00" },
+  { home: "Radomiak", away: "Motor", iso: "2026-10-12T18:00:00+02:00" },
+];
+
 const NOTE_LABELS = {
   teamAnalysis: "Team Analysis",
   injuriesAndRecovery: "Injuries & Recovery Status",
@@ -167,11 +179,21 @@ export function listAutomopsTours(leagueId, season) {
           startAt: row.start_at || null,
           endAt: row.end_at || null,
           upcoming: Number(row.upcoming_n) > 0,
+          upcomingCount: Number(row.upcoming_n) || 0,
         };
       })
       .filter(Boolean);
-    const current =
-      tours.find((t) => t.upcoming)?.tour ?? tours[tours.length - 1]?.tour ?? null;
+    // A single postponed game must not pin the selector to an old round.
+    const open = tours.filter((t) => t.upcoming);
+    const fullest =
+      open.reduce((best, t) => {
+        if (!best) return t;
+        if (t.upcomingCount !== best.upcomingCount) {
+          return t.upcomingCount > best.upcomingCount ? t : best;
+        }
+        return t.tour < best.tour ? t : best;
+      }, null)?.tour ?? null;
+    const current = fullest ?? tours[tours.length - 1]?.tour ?? null;
     return {
       leagueId: id,
       season: seasonN,
@@ -951,102 +973,6 @@ function formatKickoff(iso, timeZone = "Europe/Warsaw") {
   });
 }
 
-function bucketOf(group) {
-  const g = String(group || "starting").toLowerCase();
-  if (g === "out" || g === "dnp") return "out";
-  if (g === "bench") return "bench";
-  return "starting";
-}
-
-function mergeProbBuckets(a, b) {
-  const rows = [];
-  const find = (name) => rows.find((r) => namesOk(r.name, name));
-  const add = (p) => {
-    const hit = find(p.name);
-    const bucket = bucketOf(p.group);
-    const asSorare =
-      p.source === "sorare" || p.source === "gazetka" || p.source === "footmops";
-    if (!hit) {
-      rows.push({
-        name: p.name,
-        sorare: asSorare ? p.pct : undefined,
-        e11: p.source === "expected11" ? p.pct : undefined,
-        bucket,
-      });
-      return;
-    }
-    if (asSorare) hit.sorare = p.pct;
-    else hit.e11 = p.pct;
-    // Keep the best status (starting > bench > out), never demote a starter.
-    const rank = { starting: 0, bench: 1, out: 2 };
-    if (rank[bucket] < rank[hit.bucket]) hit.bucket = bucket;
-  };
-  a.forEach(add);
-  b.forEach(add);
-
-  const mergedPct = (r) => {
-    if (r.sorare != null && r.e11 != null) return Math.round((r.sorare + r.e11) / 2);
-    return r.sorare ?? r.e11 ?? -1;
-  };
-
-  const formatRow = (r) => {
-    if (r.bucket === "out") return `· ❌ ${escapeHtml(r.name)}`;
-    const parts = [];
-    if (r.sorare != null) parts.push(`Sorare ${r.sorare}%`);
-    if (r.e11 != null) parts.push(`E11 ${r.e11}%`);
-    const merged = r.sorare != null && r.e11 != null
-      ? Math.round((r.sorare + r.e11) / 2)
-      : (r.sorare ?? r.e11 ?? null);
-    if (merged == null) return null;
-    const detail =
-      parts.length > 1
-        ? ` → <b>${merged}%</b> (${parts.join(" · ")})`
-        : ` <b>${merged}%</b>`;
-    return `· ${escapeHtml(r.name)}${detail}`;
-  };
-
-  const pick = (bucket, limit) =>
-    rows
-      .filter((r) => r.bucket === bucket)
-      .sort((a, b) =>
-        bucket === "out"
-          ? 0
-          : mergedPct(b) - mergedPct(a) || String(a.name).localeCompare(String(b.name)),
-      )
-      .map(formatRow)
-      .filter(Boolean)
-      .slice(0, limit);
-
-  return {
-    starting: pick("starting", 11),
-    bench: pick("bench", 20),
-    out: pick("out", 20),
-  };
-}
-
-function notesHtml(title, notes, author) {
-  const order = [
-    "teamAnalysis",
-    "injuriesAndRecovery",
-    "suspensionsAndIneligibilities",
-    "additionalNotes",
-  ];
-  const chunks = [];
-  for (const key of order) {
-    const n = notes?.[key];
-    const text = (n?.text || "").trim();
-    if (!text || text === "." || /^none$/i.test(text)) continue;
-    chunks.push(
-      `<b>${escapeHtml(n?.label || NOTE_LABELS[key] || key)}</b>\n${escapeHtml(text)}`,
-    );
-  }
-  if (!chunks.length) return "";
-  const head = author
-    ? `<b>${escapeHtml(title)}</b> <i>(${escapeHtml(author)})</i>`
-    : `<b>${escapeHtml(title)}</b>`;
-  return `${head}\n${chunks.join("\n\n")}`;
-}
-
 function mergeNoteMaps(a, b) {
   const out = { ...(a || {}) };
   for (const [k, v] of Object.entries(b || {})) {
@@ -1159,9 +1085,15 @@ function footmopsProbsForTeam(snap, teamName) {
 }
 
 function applyGazetkaKickoffs(leagueId, tour, fixtures) {
-  if (leagueId !== 106 || tour !== 9) return fixtures;
+  const table =
+    leagueId === 106 && tour === 9
+      ? EKSTRAKLASA_GW9_KICKOFFS
+      : leagueId === 106 && tour === 10
+        ? EKSTRAKLASA_GW10_KICKOFFS
+        : null;
+  if (!table) return fixtures;
   return fixtures.map((f) => {
-    const hit = EKSTRAKLASA_GW9_KICKOFFS.find(
+    const hit = table.find(
       (k) => clubsOk(f.home, k.home) && clubsOk(f.away, k.away),
     );
     return hit ? { ...f, date: hit.iso } : f;
@@ -1255,30 +1187,9 @@ export function mainCaption(bundle) {
   return lines.join("\n");
 }
 
-function sideProbBlock(side) {
-  const lines = [];
-  const buckets = mergeProbBuckets(side.sorareProbs, side.e11Probs);
-  if (buckets.starting.length) {
-    lines.push("<b>Starting XI (merged)</b>");
-    lines.push(...buckets.starting);
-  }
-  if (buckets.bench.length) {
-    lines.push("<b>Bench</b>");
-    lines.push(...buckets.bench);
-  }
-  if (buckets.out.length) {
-    lines.push("<b>OUT</b>");
-    lines.push(...buckets.out);
-  }
-  if (!buckets.starting.length && !buckets.bench.length && !buckets.out.length) {
-    lines.push("<i>No Sorare / Expected11 probabilities</i>");
-  }
-  return lines;
-}
-
 function oddsBlock(m) {
   const o = m.odds;
-  if (!o) return ["<i>No bookmaker odds for this match</i>", ""];
+  if (!o) return ["<i>No bookmaker odds for this match</i>"];
   const lines = [
     o.bookmaker
       ? `<b>Bookmaker</b> · ${escapeHtml(o.bookmaker)}`
@@ -1337,45 +1248,19 @@ function oddsBlock(m) {
       );
     }
   }
-  lines.push("");
   return lines;
 }
 
+/** Match comment = header + bookmaker odds only (XI/notes live on screenshots). */
 export function matchCaption(m) {
-  const lines = [
+  return [
     `<b>${escapeHtml(m.home.name)} — ${escapeHtml(m.away.name)}</b>`,
     `🕒 ${escapeHtml(formatKickoff(m.kickoff))}`,
     "",
     ...oddsBlock(m),
-  ];
-  for (const side of [m.home, m.away]) {
-    const icon = side === m.home ? "🏠" : "✈️";
-    lines.push(`${icon} <b>${escapeHtml(side.name)}</b>`);
-    lines.push(...sideProbBlock(side));
-    lines.push("");
-  }
-  const hn = notesHtml(`Analyst notes · ${m.home.name}`, m.home.notes, m.home.author);
-  const an = notesHtml(`Analyst notes · ${m.away.name}`, m.away.notes, m.away.author);
-  if (hn) lines.push(hn, "");
-  if (an) lines.push(an, "");
-  if (!hn && !an) {
-    lines.push("<i>No analyst text (screenshots + probabilities only).</i>");
-  }
-  let text = lines.join("\n").trim();
-  if (text.length > 3900) {
-    let cut = text.slice(0, 3890);
-    cut = cut.replace(/<[^>]*$/, "");
-    const openB =
-      (cut.match(/<b>/g) || []).length - (cut.match(/<\/b>/g) || []).length;
-    const openI =
-      (cut.match(/<i>/g) || []).length - (cut.match(/<\/i>/g) || []).length;
-    text =
-      cut +
-      "</b>".repeat(Math.max(0, openB)) +
-      "</i>".repeat(Math.max(0, openI)) +
-      "…";
-  }
-  return text;
+  ]
+    .join("\n")
+    .trim();
 }
 
 async function getUpdatesOffset(token) {
@@ -1494,19 +1379,19 @@ async function findDiscussionRootByProbe(token, discussionId, channelMsgId) {
 
 async function sendMatchComment(token, discussionId, discussionRootId, m) {
   const caption = matchCaption(m);
-  // Reply to the auto-forwarded channel post INSIDE the discussion group.
-  // Cross-chat reply_parameters to the channel only creates an external quote —
-  // it does NOT show up as a channel comment count.
-  await tg(token, "sendMessage", {
-    chat_id: discussionId,
-    text: caption.slice(0, 4096),
-    parse_mode: "HTML",
-    disable_web_page_preview: true,
-    reply_to_message_id: discussionRootId,
-  });
-
   const images = [...m.home.images, ...m.away.images].filter((f) => existsSync(f));
-  if (!images.length) return;
+  // Prefer odds as the media-group caption (screenshots + bookmaker block).
+  // Fall back to a text reply when there are no images.
+  if (!images.length) {
+    await tg(token, "sendMessage", {
+      chat_id: discussionId,
+      text: caption.slice(0, 4096),
+      parse_mode: "HTML",
+      disable_web_page_preview: true,
+      reply_to_message_id: discussionRootId,
+    });
+    return;
+  }
 
   const chunk = images.slice(0, 10);
   const form = new FormData();
@@ -1519,7 +1404,7 @@ async function sendMatchComment(token, discussionId, discussionRootId, m) {
         type: "photo",
         media: `attach://file${i}`,
         ...(i === 0
-          ? { caption: `${m.home.name} vs ${m.away.name}`.slice(0, 200) }
+          ? { caption: caption.slice(0, 1024), parse_mode: "HTML" }
           : {}),
       })),
     ),

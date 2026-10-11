@@ -37,6 +37,22 @@ test("liveCompute module does not auto-start on import (argv guard)", async () =
   assert.equal(isComputedCacheEnqueueEnabled(), true);
 });
 
+test("live poller and compute iterate allLiveLeagues including extras", async () => {
+  const { allLiveLeagues } = await import("../lib/liveLeagues.js");
+  const slugs = allLiveLeagues().map((l) => l.slug);
+  assert.ok(slugs.includes("ligue-1"));
+  assert.ok(slugs.includes("la-liga"));
+  assert.ok(slugs.includes("league-one"));
+  const [poll, compute, live] = await Promise.all([
+    readFile(fileURLToPath(new URL("./liveDataPoll.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("./liveCompute.ts", import.meta.url)), "utf8"),
+    readFile(fileURLToPath(new URL("../routes/live.ts", import.meta.url)), "utf8"),
+  ]);
+  assert.match(poll, /allLiveLeagues\(\)/);
+  assert.match(compute, /allLiveLeagues\(\)/);
+  assert.match(live, /leagues: allLiveLeagues\(\)/);
+});
+
 test("liveCompute skips finished-tour rebuilds until Mantra GAMES grows", async () => {
   const src = await readFile(fileURLToPath(new URL("./liveCompute.ts", import.meta.url)), "utf8");
   assert.match(src, /cachedSeasonIdealCovers/);

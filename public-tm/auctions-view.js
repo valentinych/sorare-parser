@@ -1,4 +1,4 @@
-import { formatUiDateTime, tr } from "./i18n.js?v=24";
+import { formatUiDateTime, tr } from "./i18n.js?v=36";
 
 const POLL_MS = 8_000;
 /** Same slugs as `/live?league=` / `/xi?league=` — Latin labels match Live. */

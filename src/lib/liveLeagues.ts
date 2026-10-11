@@ -297,8 +297,9 @@ export const LIVE_LEAGUES: Record<string, LiveLeagueDef> = {
 };
 
 /**
- * Extra Mantra championships on /tables only.
- * Keep them off Live poller / tours --all so existing 6 leagues stay untouched.
+ * Extra Mantra championships first wired for /tables.
+ * Live includes them via allLiveLeagues() → allBuilderLeagues(); this catalog
+ * still marks historical-archive / tables-backfill extras.
  */
 export const TABLES_EXTRA_LEAGUES: Record<string, LiveLeagueDef> = {
   "ligue-1": withLive(61, 53, LIGUE_1_DIVISIONS),
@@ -323,8 +324,7 @@ export const TABLES_EXTRA_SLUGS = [
 ] as const;
 
 /**
- * Extra championships on Premium (unpicked tops / squad tools).
- * Keep them off Live poller and /tables so existing dashboards stay untouched.
+ * England 3: Premium tools + Live + Builder. Still off /tables.
  */
 export const PREMIUM_EXTRA_LEAGUES: Record<string, LiveLeagueDef> = {
   "league-one": withLive(41, 108, LEAGUE_ONE_DIVISIONS),
@@ -336,8 +336,8 @@ const LEAGUE_FLAG_EMOJI: Record<string, string> = {
   "serie-a": "🇮🇹",
   bundesliga: "🇩🇪",
   "premier-league": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
-  championship: "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
-  "league-one": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+  championship: "🇬🇧",
+  "league-one": "🏴󠁧󠁢󠁷󠁬󠁳󠁿",
   "super-lig": "🇹🇷",
   "ligue-1": "🇫🇷",
   "la-liga": "🇪🇸",
@@ -358,13 +358,18 @@ export function leagueFlagEmoji(slug: string | null | undefined): string {
 
 export const DEFAULT_LIVE_SLUG = "ekstraklasa";
 
-export function allLiveLeagues(): LiveLeagueDef[] {
+function coreLiveLeagues(): LiveLeagueDef[] {
   return Object.values(LIVE_LEAGUES);
+}
+
+/** Live picker + poller + tours --all: same set as Builder. */
+export function allLiveLeagues(): LiveLeagueDef[] {
+  return allBuilderLeagues();
 }
 
 export function allTablesLeagues(): LiveLeagueDef[] {
   return [
-    ...allLiveLeagues(),
+    ...coreLiveLeagues(),
     ...TABLES_EXTRA_SLUGS.map((slug) => TABLES_EXTRA_LEAGUES[slug]!),
   ];
 }
@@ -373,14 +378,14 @@ export function allPremiumExtraLeagues(): LiveLeagueDef[] {
   return Object.values(PREMIUM_EXTRA_LEAGUES);
 }
 
-/** Live 6 + /tables extras + Premium-only England 3. Squad Builder catalog. */
+/** Core 6 + /tables extras + England 3. Squad Builder and Live catalog. */
 export function allBuilderLeagues(): LiveLeagueDef[] {
   return [...allTablesLeagues(), ...allPremiumExtraLeagues()];
 }
 
-/** Live 6 + Premium-only extras (not /tables extras). */
+/** Core 6 + England 3 (not /tables extras). */
 export function allPremiumLeagues(): LiveLeagueDef[] {
-  return [...allLiveLeagues(), ...allPremiumExtraLeagues()];
+  return [...coreLiveLeagues(), ...allPremiumExtraLeagues()];
 }
 
 /** Division rows when `mantra_leagues` is empty — ids from LIVE/TABLES/PREMIUM catalogs only. */
@@ -541,6 +546,26 @@ export function tourHasFirstKickoff(
   });
 }
 
+/**
+ * Round nav can already point at the next shell ("Round inactive", no /matches/id)
+ * while the previous tour still has the lineups being scored. Stay on that tour.
+ * Do not step back across a season boundary (38 → 1).
+ */
+export function preferPlayableMantraTour<
+  T extends { round: number | null; matches: Array<{ matchId: number | null }> },
+>(current: T, previous: T | null): T {
+  if (current.matches.some((m) => m.matchId != null)) return current;
+  if (!previous?.matches.some((m) => m.matchId != null)) return current;
+  if (
+    current.round != null &&
+    previous.round != null &&
+    previous.round === current.round - 1
+  ) {
+    return previous;
+  }
+  return current;
+}
+
 /** Probe of tourId+1 is the next round for that division (ids increment by 1). */
 export function shouldAutoOpenNextTour(
   currentRound: number | null | undefined,
@@ -549,9 +574,12 @@ export function shouldAutoOpenNextTour(
     locked: boolean;
     kickedOff?: boolean;
     hasDeadline?: boolean;
+    /** False when the next page is an inactive shell with no match links. */
+    playable?: boolean;
   } | null,
 ): boolean {
   if (!next || next.round == null || !Number.isFinite(next.round)) return false;
+  if (next.playable === false) return false;
   if (!next.locked && !next.kickedOff && !next.hasDeadline) return false;
   if (currentRound == null) return true;
   return Number(next.round) > Number(currentRound);

@@ -77,6 +77,13 @@ test("parseSorareInsideExpandRequest validates rounds", () => {
   );
 });
 
+test("lineupTeamLabelsMatch does not treat a LIVE chip as Liverpool", () => {
+  assert.equal(lineupTeamLabelsMatch("LIVE", "Liverpool FC"), false);
+  assert.equal(lineupTeamLabelsMatch("FT", "Liverpool FC"), false);
+  assert.equal(lineupTeamLabelsMatch("Liverpool", "Liverpool FC"), true);
+  assert.equal(lineupTeamLabelsMatch("Liverpool FC", "Liverpool FC"), true);
+});
+
 test("lineupTeamLabelsMatch treats FC suffix and ellipsis as the same club", () => {
   assert.equal(lineupTeamLabelsMatch("Middlesbrough", "Middlesbrough FC"), true);
   assert.equal(lineupTeamLabelsMatch("Middlesbrough FC", "Middlesbrough"), true);

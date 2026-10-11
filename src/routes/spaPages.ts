@@ -127,11 +127,11 @@ export function composeSpaPage(html: string, page: SpaPage): string {
   );
   out = out.replace(
     /<script src="\/app\.js\?v=\d+" type="module"><\/script>/,
-    '<script src="/boot.js?v=77" type="module"></script>',
+    '<script src="/boot.js?v=85" type="module"></script>',
   );
   out = out.replace(
     /<script src="\/boot\.js\?v=\d+" type="module"><\/script>/,
-    '<script src="/boot.js?v=77" type="module"></script>',
+    '<script src="/boot.js?v=85" type="module"></script>',
   );
   const title = PAGE_TITLES[page];
   out = out.replace(

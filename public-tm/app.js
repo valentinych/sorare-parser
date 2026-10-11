@@ -5,9 +5,9 @@ import {
   initI18n,
   setUiPreferences,
   tr,
-} from "./i18n.js?v=24";
+} from "./i18n.js?v=36";
 import { googleSignInEnabled } from "./live-draft-access.js?v=1";
-import { esc as escCore, pageHooks } from "./core.js?v=1";
+import { esc as escCore, pageHooks } from "./core.js?v=14";
 
 initI18n();
 function esc(s) {

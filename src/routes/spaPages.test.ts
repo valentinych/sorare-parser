@@ -32,7 +32,7 @@ test("composed menu pages keep one view and boot.js, not the monolith", async ()
   assert.doesNotMatch(live, /id="view-auctions"/);
   assert.doesNotMatch(live, /id="view-sorare"/);
   assert.doesNotMatch(live, /id="view-xi"/);
-  assert.match(live, /boot\.js\?v=77/);
+  assert.match(live, /boot\.js\?v=85/);
   assert.match(live, /id="ideal-vs-real-dialog"/);
   assert.match(live, /id="dream-team-dialog"/);
   assert.doesNotMatch(live, /app\.js\?v=/);
@@ -106,7 +106,7 @@ test("feature page modules do not pull unrelated bundles", async () => {
   assert.match(appJs, /xi-season"\)\?\.addEventListener/);
   assert.match(appJs, /builder-my-teams[\s\S]{0,80}if \(myTeams\)/);
   assert.match(appJs, /const MANTRA_POS_COLOR = \{/);
-  assert.match(boot, /builder: "\.\/app\.js\?v=148"/);
+  assert.match(boot, /builder: "\.\/app\.js\?v=151"/);
   assert.doesNotMatch(live, /auctions-view/);
   assert.doesNotMatch(live, /app\.js/);
   assert.doesNotMatch(live, /expected11-view/);
@@ -122,7 +122,7 @@ test("GET /auctions and GET / serve HTML without app.js", async (t) => {
   t.after(() => app.close());
   const home = await app.inject({ method: "GET", url: "/" });
   assert.equal(home.statusCode, 200);
-  assert.match(home.body, /boot\.js\?v=77/);
+  assert.match(home.body, /boot\.js\?v=85/);
   assert.doesNotMatch(home.body, /app\.js\?v=/);
   assert.match(home.body, /id="view-clubs"/);
   const auctions = await app.inject({ method: "GET", url: "/auctions" });
@@ -133,6 +133,6 @@ test("GET /auctions and GET / serve HTML without app.js", async (t) => {
   assert.equal(builder.statusCode, 200);
   assert.match(builder.body, /data-page="builder"/);
   assert.match(builder.body, /id="view-builder"/);
-  assert.match(builder.body, /boot\.js\?v=77/);
+  assert.match(builder.body, /boot\.js\?v=85/);
   assert.doesNotMatch(builder.body, /app\.js\?v=/);
 });

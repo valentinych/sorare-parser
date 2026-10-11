@@ -7203,6 +7203,128 @@ dialog::backdrop {
   background: color-mix(in srgb, #f1f5f9 70%, transparent);
 }
 
+.live-my-teams {
+  margin-top: 1.25rem;
+}
+
+.live-my-matches {
+  margin-bottom: 1.25rem;
+}
+
+.live-my-pairs {
+  display: grid;
+  gap: 0.65rem;
+}
+
+@media (min-width: 900px) {
+  .live-my-pairs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+.live-my-pairs .mantra-match {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 0.65rem 0.45rem;
+  height: 100%;
+}
+
+.mantra-match-flag {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.live-my-teams-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+@media (min-width: 900px) {
+  .live-my-teams-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+.live-my-col {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 0.75rem 0.85rem;
+}
+
+.live-my-col h3 {
+  margin: 0 0 0.55rem;
+  font-size: 0.95rem;
+}
+
+.live-my-player {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  column-gap: 0.45rem;
+  align-items: baseline;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.live-my-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.live-my-name a {
+  color: inherit;
+}
+
+.live-my-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.live-my-score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.6rem;
+  padding: 0.08rem 0.38rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.live-my-score.is-pending {
+  background: #fff;
+  color: #111;
+  border-color: rgba(17, 17, 17, 0.16);
+}
+
+.live-my-score.is-unused {
+  background: #d92d20;
+  color: #fff;
+}
+
+.live-my-score.is-live {
+  background: #fff;
+  color: #d92d20;
+  border-color: rgba(217, 45, 32, 0.4);
+}
+
+.live-my-score.is-played {
+  background: #111;
+  color: #fff;
+}
+
+.live-my-player small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 @media (max-width: 720px) {
   .top-right {
     align-items: stretch;

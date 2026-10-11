@@ -200,3 +200,36 @@ test("stale GET /live with LIVE_POLLER=0 does not kick network sync", async () =
     else process.env.LIVE_HTTP_REFRESH = prevHttp;
   }
 });
+
+test("GET /live/leagues lists the Builder catalog including extras", async () => {
+  const app = Fastify();
+  await app.register(liveRoutes);
+  const res = await app.inject({ method: "GET", url: "/live/leagues" });
+  assert.equal(res.statusCode, 200);
+  const body = res.json() as {
+    default: string;
+    leagues: Array<{ slug: string; tmCompetition: string; fotmobLeagueId: number }>;
+  };
+  assert.equal(body.default, "ekstraklasa");
+  assert.deepEqual(body.leagues.map((l) => l.slug), [
+    "ekstraklasa",
+    "serie-a",
+    "bundesliga",
+    "premier-league",
+    "championship",
+    "super-lig",
+    "ligue-1",
+    "la-liga",
+    "eredivisie",
+    "jupiler-pro-league",
+    "primeira-liga",
+    "upl",
+    "mls",
+    "brasileirao",
+    "league-one",
+  ]);
+  assert.equal(body.leagues.find((l) => l.slug === "ligue-1")?.tmCompetition, "FR1");
+  assert.equal(body.leagues.find((l) => l.slug === "la-liga")?.fotmobLeagueId, 87);
+  assert.equal(body.leagues.find((l) => l.slug === "league-one")?.tmCompetition, "GB3");
+  await app.close();
+});

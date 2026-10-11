@@ -131,9 +131,10 @@ function loadL2(database: Database.Database, key: string): MemoryEntry | undefin
 
 /**
  * Resolve cache entry for a requested version.
- * On L1 miss/mismatch, always re-read SQLite — the compute worker may have
- * written a newer row while this process (web, COMPUTE_ENQUEUE=0) still holds
- * forever-stale memory from the first GET /live.
+ * Re-read SQLite when memory misses, the version differs, or the row was
+ * rewritten with the same version but a newer built_at. The compute worker
+ * can replace a body in place (web, COMPUTE_ENQUEUE=0) without bumping the
+ * version string.
  */
 function entryForVersion(
   database: Database.Database,
@@ -141,7 +142,14 @@ function entryForVersion(
   version: string,
 ): MemoryEntry | undefined {
   const mem = memory.get(key);
-  if (mem?.version === version) return mem;
+  if (mem?.version === version) {
+    const row = readRow(database, key);
+    if (row?.version === version && row.builtAt > mem.builtAt) {
+      const fresher = loadL2(database, key);
+      if (fresher) return fresher;
+    }
+    return mem;
+  }
   const fromDb = loadL2(database, key);
   if (fromDb) return fromDb;
   return mem;

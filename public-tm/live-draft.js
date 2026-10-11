@@ -1,4 +1,4 @@
-import { initI18n, tr } from "./i18n.js?v=33";
+import { initI18n, tr } from "./i18n.js?v=36";
 import {
   googleSignInEnabled,
   liveDraftAccess,

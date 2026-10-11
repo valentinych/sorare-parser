@@ -10,6 +10,7 @@ import {
   Expected11MappingError,
   getExpected11MappingView,
   getExpected11PremiumView,
+  reloadPremiumOddsJoin,
   relinkPremiumSquadMappings,
   removeExpected11ManualMapping,
   saveExpected11ManualMapping,
@@ -60,6 +61,7 @@ type Expected11PremiumRouteOptions = {
     actor: Expected11PremiumActor,
     force: boolean,
   ) => void | Promise<void>;
+  refreshOdds?: (actor: Expected11PremiumActor) => void | Promise<void>;
   saveMapping?: (
     input: {
       sourceName: string;
@@ -217,6 +219,13 @@ export async function expected11PremiumRoutes(
           await ensureManagerPremiumSquads(actor.mantraManagerId, { force });
           if (force) relinkPremiumSquadMappings();
         });
+  const refreshOdds =
+    options.refreshOdds ??
+    (options.premiumView
+      ? async () => undefined
+      : async (actor: Expected11PremiumActor) => {
+          reloadPremiumOddsJoin(actor);
+        });
   const saveMapping = options.saveMapping ?? saveExpected11ManualMapping;
   const removeMapping =
     options.removeMapping ?? removeExpected11ManualMapping;
@@ -330,6 +339,21 @@ export async function expected11PremiumRoutes(
   app.post("/api/expected11/premium/refresh", async (request, reply) => {
     if (!requireSameOrigin(request, reply)) return;
     return premiumPayload(request, reply, true);
+  });
+
+  app.post("/api/expected11/premium/refresh-odds", async (request, reply) => {
+    if (!requireSameOrigin(request, reply)) return;
+    reply.header("Cache-Control", "private, no-store");
+    const actor = authorize(request, reply);
+    if (!actor) return;
+    try {
+      await refreshOdds(actor);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      request.log.error(error, "premium odds refresh failed");
+      return reply.code(500).send({ error: message || "premium_odds_refresh_failed" });
+    }
+    return premiumPayload(request, reply, false);
   });
 
   app.get("/api/expected11/premium/refresh-auctions", async (request, reply) => {

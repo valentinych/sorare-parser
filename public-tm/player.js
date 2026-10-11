@@ -2,7 +2,7 @@ import {
   formatUiDateTime,
   initI18n,
   setUiPreferences,
-} from "./i18n.js?v=4";
+} from "./i18n.js?v=36";
 
 initI18n();
 

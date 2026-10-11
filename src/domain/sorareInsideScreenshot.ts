@@ -88,6 +88,13 @@ export const LINEUP_TEAM_LABELS_MATCH_SOURCE = `(displayed, wanted) => {
   const want = String(wanted || "").trim();
   if (!want) return false;
   const collapsed = fold(shown);
+  // A live-match chip is a 4-letter prefix of "Liverpool" and must not
+  // count as the club row (that skips expanding the league).
+  const STATUS_LABEL = {
+    live: 1, ft: 1, ht: 1, ns: 1, tbd: 1, aet: 1, pen: 1, pens: 1,
+    postponed: 1, final: 1, scheduled: 1, upcoming: 1, finished: 1,
+  };
+  if (STATUS_LABEL[collapsed]) return false;
   const wantFold = fold(want);
   const wantNoFc = stripFc(want);
   if (!wantNoFc) return false;

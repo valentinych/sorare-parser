@@ -194,7 +194,9 @@ export function generatePremiumLineups(players, formations, positionOrder = []) 
  *
  * score = w_season * seasonAvg/10
  *       + w_form   * last5Avg/10
- *       + w_xi     * xiProb          // E11 % or footmops; OUT / no fixture = 0
+ *       + w_xi     * xiProb          // E11 % or footmops when that source exists
+ *                                     // omitted when lineup % / footmops group is absent
+ *                                     // OUT, or no fixture while a lineup source exists = 0
  *       + w_win    * pWin
  *       + w_cs     * pCs * csFactor // mantraScoring CS bonus / 1.5; slot ∩ native
  *       + w_goals  * pGoals * goalW
@@ -276,8 +278,20 @@ export function isPremiumOut(player) {
   );
 }
 
+function hasFootmopsGroup(player) {
+  return player?.footmopsGroup != null && String(player.footmopsGroup).trim() !== "";
+}
+
+/** Expected11 % or footmops % / group. Absent means the league has no lineup source. */
+export function hasPremiumLineupSource(player) {
+  if (finiteNumber(player?.displayedPercentage) != null) return true;
+  if (finiteNumber(player?.footmopsPercentage) != null) return true;
+  return hasFootmopsGroup(player);
+}
+
 export function premiumXiProb(player) {
   if (isPremiumOut(player)) return 0;
+  if (!hasPremiumLineupSource(player)) return null;
   if (!hasPremiumFixture(player)) return 0;
   const pct = finiteNumber(
     player?.displayedPercentage ?? player?.footmopsPercentage,
@@ -309,34 +323,47 @@ export function premiumGoalWeight(positions) {
   return weight == null ? 0 : weight;
 }
 
+function oddsInput(player, key) {
+  return finiteNumber(player?.[key]);
+}
+
 export function premiumPlayerScore(player, slotAccepted) {
   const native = Array.isArray(player?.positions) ? player.positions : [];
   const slot = slotAccepted && slotAccepted.length ? slotAccepted : native;
   const season = finiteNumber(player?.seasonAvgRating);
   const form = finiteNumber(player?.last5AvgRating);
   const xiProb = premiumXiProb(player);
-  const pWin = clamp01(finiteNumber(player?.winProbability) ?? 0);
-  const pCs = clamp01(finiteNumber(player?.cleanSheetProbability) ?? 0);
+  const pWinRaw = oddsInput(player, "winProbability");
+  const pCsRaw = oddsInput(player, "cleanSheetProbability");
+  const pGoalsRaw = oddsInput(player, "teamScoreProbability");
+  const oppCsRaw = oddsInput(player, "opponentCleanSheetProbability");
+  const pWin = pWinRaw == null ? 0 : clamp01(pWinRaw);
+  const pCs = pCsRaw == null ? 0 : clamp01(pCsRaw);
   const pGoals = premiumGoalsProb(player);
   const csFactor = premiumCsFactor(native, slot);
   const goalW = premiumGoalWeight(slot);
   const noFixture = hasPremiumFixture(player) ? 0 : 1;
   const w = PREMIUM_XI_WEIGHTS;
+  const xiTerm = xiProb == null ? 0 : w.xi * xiProb;
   const total =
     w.season * ((season ?? 0) / 10) +
     w.form * ((form ?? 0) / 10) +
-    w.xi * xiProb +
-    w.win * pWin +
-    w.cs * pCs * csFactor +
-    w.goals * pGoals * goalW -
+    xiTerm +
+    (pWinRaw == null ? 0 : w.win * pWin) +
+    (pCsRaw == null ? 0 : w.cs * pCs * csFactor) +
+    (pGoalsRaw == null && oppCsRaw == null ? 0 : w.goals * pGoals * goalW) -
     w.noFixture * noFixture;
   const title = [
     season != null ? `сезон ${season.toFixed(1)}` : null,
     form != null ? `форма ${form.toFixed(1)}` : null,
-    `XI ${(xiProb * 100).toFixed(0)}%`,
-    `win ${(pWin * 100).toFixed(0)}%`,
-    csFactor > 0 ? `CS ${(pCs * 100).toFixed(0)}%×${csFactor.toFixed(2)}` : null,
-    goalW > 0 ? `гол ${(pGoals * 100).toFixed(0)}%×${goalW.toFixed(2)}` : null,
+    xiProb == null ? null : `XI ${(xiProb * 100).toFixed(0)}%`,
+    pWinRaw == null ? null : `win ${(pWin * 100).toFixed(0)}%`,
+    pCsRaw != null && csFactor > 0
+      ? `CS ${(pCs * 100).toFixed(0)}%×${csFactor.toFixed(2)}`
+      : null,
+    goalW > 0 && (pGoalsRaw != null || oppCsRaw != null)
+      ? `гол ${(pGoals * 100).toFixed(0)}%×${goalW.toFixed(2)}`
+      : null,
     noFixture ? "нет матча" : null,
   ]
     .filter(Boolean)

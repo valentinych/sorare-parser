@@ -781,6 +781,15 @@ const rows = [
   ["Премьер-лига", "Premier League", "Прем’єр-ліга", "Прэм’ер-ліга"],
   ["Чемпионшип", "Championship", "Чемпіоншип", "Чэмпіёншып"],
   ["Суперлига", "Süper Lig", "Суперліга", "Суперліга"],
+  ["Лига 1", "Ligue 1", "Ліга 1", "Ліга 1"],
+  ["Ла Лига", "La Liga", "Ла Ліга", "Ла Ліга"],
+  ["Эредивизи", "Eredivisie", "Ередивізі", "Эрэдывізі"],
+  ["Про-лига", "Pro League", "Про-ліга", "Про-ліга"],
+  ["Примейра-лига", "Primeira Liga", "Прімейра-ліга", "Прымэйра-ліга"],
+  ["УПЛ", "UPL", "УПЛ", "УПЛ"],
+  ["MLS", "MLS", "MLS", "MLS"],
+  ["Бразилейран", "Brasileirão", "Бразилейран", "Бразілейран"],
+  ["League One", "League One", "League One", "League One"],
 ["Mantra Дома", "Mantra Home", "Mantra Вдома", "Mantra Дома"],
   ["Заявиться", "Apply", "Заявитися", "Заявіцца"],
   ["Обновить заявку", "Update application", "Оновити заявку", "Абнавіць заяўку"],
@@ -814,6 +823,180 @@ const rows = [
   ["Вид", "View", "Вигляд", "Выгляд"],
   ["Плитки", "Tiles", "Плитки", "Пліткі"],
   ["Список", "List", "Список", "Спіс"],
+  ["Обновить после раундов аукциона", "Refresh after auction rounds", "Оновити після раундів аукціону", "Абнавіць пасля раундаў аўкцыёну"],
+  ["Обновить статус после рассчитанных раундов аукциона", "Refresh status after calculated auction rounds", "Оновити статус після розрахованих раундів аукціону", "Абнавіць статус пасля разлічаных раундаў аўкцыёну"],
+  ["Обновляю аукцион выбранной лиги…", "Refreshing the selected league auction…", "Оновлюю аукціон вибраної ліги…", "Абнаўляю аўкцыён выбранай лігі…"],
+  ["Обновить состав моей команды", "Refresh my team squad", "Оновити склад моєї команди", "Абнавіць склад маёй каманды"],
+  ["Загрузка Premium…", "Loading Premium…", "Завантаження Premium…", "Загрузка Premium…"],
+  ["Состав Mantra", "Mantra squad", "Склад Mantra", "Склад Mantra"],
+  ["Никто не выбран", "None selected", "Нікого не обрано", "Ніхто не выбраны"],
+  ["Сгенерировать состав", "Generate squad", "Згенерувати склад", "Згенераваць склад"],
+  ["Форма 0.00–10.00", "Form 0.00–10.00", "Форма 0.00–10.00", "Форма 0.00–10.00"],
+  ["Форма 0.00–10.00: минуты, регулярность старта, FotMob и TS. Цена — кредиты с аукциона этой лиги. Статус: короткий бейдж (травма / дисквал / сомнителен / OUT), подсказка по наведению.", "Form 0.00–10.00: minutes, start regularity, FotMob and TS. Price is credits from this league’s auction. Status: short badge (injury / ban / doubt / OUT), details on hover.", "Форма 0.00–10.00: хвилини, регулярність старту, FotMob і TS. Ціна — кредити з аукціону цієї ліги. Статус: короткий бейдж (травма / дискваліфікація / сумнівний / OUT), підказка при наведенні.", "Форма 0.00–10.00: хвіліны, рэгулярнасць старту, FotMob і TS. Цана — крэдыты з аўкцыёну гэтай лігі. Статус: кароткі бейдж (траўма / дыскваліфікацыя / сумнеўны / OUT), падказка пры навядзенні."],
+  ["Выбери команду — минуты, оценка и статус по сезону.", "Select a team — minutes, rating and status for the season.", "Оберіть команду — хвилини, оцінка та статус за сезон.", "Абярыце каманду — хвіліны, ацэнка і статус за сезон."],
+  ["Топ-5 свободных", "Top 5 unpicked", "Топ-5 вільних", "Топ-5 вольных"],
+  ["Выбери команду — лучшие невзятые по позициям.", "Select a team — best unpicked players by position.", "Оберіть команду — найкращі невзяті за позиціями.", "Абярыце каманду — найлепшыя неўзятыя па пазіцыях."],
+  ["Игроки, которых никто не взял в этой лиге. Оценка 0.00–10.00: минуты, регулярность старта, FotMob и TS.", "Players nobody picked in this league. Score 0.00–10.00: minutes, start regularity, FotMob and TS.", "Гравці, яких ніхто не взяв у цій лізі. Оцінка 0.00–10.00: хвилини, регулярність старту, FotMob і TS.", "Гульцы, якіх ніхто не ўзяў у гэтай лізе. Ацэнка 0.00–10.00: хвіліны, рэгулярнасць старту, FotMob і TS."],
+  ["Все команды", "All teams", "Усі команди", "Усе каманды"],
+  ["Оценка", "Score", "Оцінка", "Ацэнка"],
+  ["оценка", "score", "оцінка", "ацэнка"],
+  ["футмопс", "footmops", "футмопс", "футмопс"],
+  ["CS клуба", "Club CS", "CS клубу", "CS клуба"],
+  ["CS соперника", "Opponent CS", "CS суперника", "CS суперніка"],
+  ["сортировать по убыванию", "sort descending", "сортувати за спаданням", "сартаваць па змяншэнні"],
+  ["сортировать по возрастанию", "sort ascending", "сортувати за зростанням", "сартаваць па ўзрастанні"],
+  ["по убыванию", "descending", "за спаданням", "па змяншэнні"],
+  ["по возрастанию", "ascending", "за зростанням", "па ўзрастанні"],
+  ["Оценка: сортировать по убыванию", "Score: sort descending", "Оцінка: сортувати за спаданням", "Ацэнка: сартаваць па змяншэнні"],
+  ["Вероятность XI: сортировать по убыванию", "XI probability: sort descending", "Ймовірність XI: сортувати за спаданням", "Імавернасць XI: сартаваць па змяншэнні"],
+  ["футмопс: сортировать по убыванию", "footmops: sort descending", "футмопс: сортувати за спаданням", "футмопс: сартаваць па змяншэнні"],
+  ["P(win): сортировать по убыванию", "P(win): sort descending", "P(win): сортувати за спаданням", "P(win): сартаваць па змяншэнні"],
+  ["CS клуба: сортировать по убыванию", "Club CS: sort descending", "CS клубу: сортувати за спаданням", "CS клуба: сартаваць па змяншэнні"],
+  ["CS соперника: сортировать по убыванию", "Opponent CS: sort descending", "CS суперника: сортувати за спаданням", "CS суперніка: сартаваць па змяншэнні"],
+  ["Кредиты на аукционе этой лиги", "Credits from this league’s auction", "Кредити на аукціоні цієї ліги", "Крэдыты на аўкцыёне гэтай лігі"],
+  ["Mantra TS с бонусами", "Mantra TS with bonuses", "Mantra TS з бонусами", "Mantra TS з бонусамі"],
+  ["Нет свободных на этой позиции.", "No unpicked players in this position.", "Немає вільних на цій позиції.", "Няма вольных на гэтай пазіцыі."],
+  ["Отчёт…", "Report…", "Звіт…", "Справаздача…"],
+  ["Свободные…", "Unpicked…", "Вільні…", "Вольныя…"],
+  ["Выбери команду — XI собирается по одному составу.", "Select a team — XI is built for one squad at a time.", "Оберіть команду — XI збирається по одному складу.", "Абярыце каманду — XI збіраецца па адным складзе."],
+  ["Обновляю состав…", "Refreshing squad…", "Оновлюю склад…", "Абнаўляю склад…"],
+  ["Сначала укажи Mantra Manager ID в настройках аккаунта.", "Enter your Mantra Manager ID in account settings first.", "Спочатку вкажіть Mantra Manager ID у налаштуваннях облікового запису.", "Спачатку пазначце Mantra Manager ID у наладах акаўнта."],
+  ["травма", "injury", "травма", "траўма"],
+  ["дисквал", "ban", "дискваліфікація", "дыскваліфікацыя"],
+  ["дискв.", "ban", "дискв.", "дыскв."],
+  ["сомнителен", "doubt", "сумнівний", "сумнеўны"],
+  ["нет данных", "no data", "немає даних", "няма даных"],
+  ["возврат", "return", "повернення", "вяртанне"],
+  ["видно", "visible", "видно", "бачна"],
+  ["Вне заявки", "Outside the squad", "Поза заявкою", "Па-за заяўкай"],
+  ["Скамейка", "Bench", "Лавка", "Лаўка"],
+  ["нет матча", "no match", "немає матчу", "няма матча"],
+  ["форма", "form", "форма", "форма"],
+  ["Нужен минимум 1 вратарь и 10 полевых, которые сложатся в схему Mantra. Выбранные игроки не заполняют ни одну схему.", "Need at least 1 goalkeeper and 10 outfield players who can fill a Mantra formation. The selected players do not complete any formation.", "Потрібен мінімум 1 воротар і 10 польових, які складуть схему Mantra. Обрані гравці не заповнюють жодну схему.", "Патрэбны мінімум 1 брамнік і 10 палявых, якія складуць схему Mantra. Выбраныя гульцы не запаўняюць ніводную схему."],
+  ["Нужен минимум 1 вратарь и 10 полевых, которые сложатся в схему Mantra. Игроки не заполняют ни одну схему.", "Need at least 1 goalkeeper and 10 outfield players who can fill a Mantra formation. The players do not complete any formation.", "Потрібен мінімум 1 воротар і 10 польових, які складуть схему Mantra. Гравці не заповнюють жодну схему.", "Патрэбны мінімум 1 брамнік і 10 палявых, якія складуць схему Mantra. Гульцы не запаўняюць ніводную схему."],
+  ["% к идеалу", "% of ideal", "% до ідеалу", "% да ідэалу"],
+  ["GF идеальной таблицы дивизиона", "Division ideal-table GF", "GF ідеальної таблиці дивізіону", "GF ідэальнай табліцы дывізіёна"],
+  ["GA идеальной таблицы дивизиона", "Division ideal-table GA", "GA ідеальної таблиці дивізіону", "GA ідэальнай табліцы дывізіёна"],
+  ["GD идеальной таблицы дивизиона", "Division ideal-table GD", "GD ідеальної таблиці дивізіону", "GD ідэальнай табліцы дывізіёна"],
+  ["POINTS идеальной таблицы дивизиона", "Division ideal-table POINTS", "POINTS ідеальної таблиці дивізіону", "POINTS ідэальнай табліцы дывізіёна"],
+  ["GF − iGF (реальные голы минус идеальная таблица)", "GF − iGF (real goals minus the ideal table)", "GF − iGF (реальні голи мінус ідеальна таблиця)", "GF − iGF (рэальныя галы мінус ідэальная табліца)"],
+  ["PTS − iPTS (очки Mantra минус идеальная таблица)", "PTS − iPTS (Mantra points minus the ideal table)", "PTS − iPTS (очки Mantra мінус ідеальна таблиця)", "PTS − iPTS (ачкі Mantra мінус ідэальная табліца)"],
+  ["PTS − iPTS за матч", "PTS − iPTS per match", "PTS − iPTS за матч", "PTS − iPTS за матч"],
+  ["TS / Ideal TS × 100 за те же туры, что в GAMES", "TS / Ideal TS × 100 for the same rounds as GAMES", "TS / Ideal TS × 100 за ті самі тури, що в GAMES", "TS / Ideal TS × 100 за тыя ж туры, што ў GAMES"],
+  ["Сколько команд менеджера играют в чемпионатах", "How many of the manager’s teams play in championships", "Скільки команд менеджера грають у чемпіонатах", "Колькі каманд менеджара гуляюць у чэмпіянатах"],
+  ["Голы Ideal XI", "Ideal XI goals", "Голи Ideal XI", "Галы Ideal XI"],
+  ["Пропущенные Ideal XI", "Ideal XI goals conceded", "Пропущені Ideal XI", "Прапушчаныя Ideal XI"],
+  ["Средний Ideal XI", "Average Ideal XI", "Середній Ideal XI", "Сярэдні Ideal XI"],
+  ["Средний Ideal XI за матч", "Average Ideal XI per match", "Середній Ideal XI за матч", "Сярэдні Ideal XI за матч"],
+  ["Сумма Ideal XI", "Ideal XI total", "Сума Ideal XI", "Сума Ideal XI"],
+  ["Сумма Ideal XI за завершённые туры", "Ideal XI total for finished rounds", "Сума Ideal XI за завершені тури", "Сума Ideal XI за завершаныя туры"],
+  ["сумма TS / сумма Ideal TS", "sum of TS / sum of Ideal TS", "сума TS / сума Ideal TS", "сума TS / сума Ideal TS"],
+  ["Менеджер", "Manager", "Менеджер", "Менеджар"],
+  ["Чемпионаты", "Championships", "Чемпіонати", "Чэмпіянаты"],
+  ["Ideal TS", "Ideal TS", "Ideal TS", "Ideal TS"],
+  ["Ideal XI", "Ideal XI", "Ideal XI", "Ideal XI"],
+  ["Ideal vs Real", "Ideal vs Real", "Ideal vs Real", "Ideal vs Real"],
+  ["счёт Mantra неизвестен", "Mantra score unknown", "рахунок Mantra невідомий", "лік Mantra невядомы"],
+  ["Насколько реальный XI близок к идеалу (реал / идеал)", "How close the real XI is to the ideal (real / ideal)", "Наскільки реальний XI близький до ідеалу (реал / ідеал)", "Наколькі рэальны XI блізкі да ідэалу (рэал / ідэал)"],
+  ["Лучший возможный XI из 26", "Best possible XI from 26", "Найкращий можливий XI з 26", "Найлепшы магчымы XI з 26"],
+  ["Заблокированный состав тура", "Locked round lineup", "Заблокований склад туру", "Заблакаваны склад тура"],
+  ["Пара тура", "Round pairing", "Пара туру", "Пара тура"],
+  ["Отчёты", "Reports", "Звіти", "Справаздачы"],
+  ["Поз. TM (или)", "TM pos. (or)", "Поз. TM (або)", "Паз. TM (ці)"],
+  ["Поз. TM (и)", "TM pos. (and)", "Поз. TM (і)", "Паз. TM (і)"],
+  ["Поз. FotMob (или)", "FotMob pos. (or)", "Поз. FotMob (або)", "Паз. FotMob (ці)"],
+  ["Поз. FotMob (и)", "FotMob pos. (and)", "Поз. FotMob (і)", "Паз. FotMob (і)"],
+  ["Поз. FotMob", "FotMob pos.", "Поз. FotMob", "Паз. FotMob"],
+  ["Обновить снимок", "Refresh snapshot", "Оновити знімок", "Абнавіць здымак"],
+  ["Выбрать видимых", "Select visible", "Обрати видимих", "Выбраць бачных"],
+  ["Mantra-позиция", "Mantra position", "Позиція Mantra", "Пазіцыя Mantra"],
+  ["Назначить выбранным", "Assign to selected", "Призначити обраним", "Прызначыць выбраным"],
+  ["Очистить позиции mantra", "Clear Mantra positions", "Очистити позиції mantra", "Ачысціць пазіцыі mantra"],
+  ["Клуб TM", "TM club", "Клуб TM", "Клуб TM"],
+  ["Игрок TM", "TM player", "Гравець TM", "Гулец TM"],
+  ["Позиции TM", "TM positions", "Позиції TM", "Пазіцыі TM"],
+  ["FotMob без пары TM", "FotMob without a TM pair", "FotMob без пари TM", "FotMob без пары TM"],
+  ["Выбери TM-игрока без FotMob-пары и нажми «Связать».", "Pick a TM player without a FotMob pair and press “Link”.", "Оберіть TM-гравця без пари FotMob і натисніть «Зв’язати».", "Абярыце TM-гульца без пары FotMob і націсніце «Звязаць»."],
+  ["Синхронизировать матчи", "Sync matches", "Синхронізувати матчі", "Сінхранізаваць матчы"],
+  ["BS = оценка FotMob · TS = Mantra total по основной Mantra-позиции (первая назначенная).", "BS = FotMob rating · TS = Mantra total for the primary Mantra position (first assigned).", "BS = оцінка FotMob · TS = Mantra total за основною позицією Mantra (перша призначена).", "BS = ацэнка FotMob · TS = Mantra total па асноўнай пазіцыі Mantra (першая прызначаная)."],
+  ["Загрузка отчётов…", "Loading reports…", "Завантаження звітів…", "Загрузка справаздач…"],
+  ["Отчёты ещё не загружены", "Reports have not been loaded yet", "Звіти ще не завантажено", "Справаздачы яшчэ не загружаны"],
+  ["Нет игроков по фильтру (нужны Mantra-позиции + связь FotMob)", "No players match the filter (Mantra positions and a FotMob link are required)", "Немає гравців за фільтром (потрібні позиції Mantra + зв’язок FotMob)", "Няма гульцоў паводле фільтра (патрэбны пазіцыі Mantra + сувязь FotMob)"],
+  ["Нет игроков по фильтру", "No players match the filter", "Немає гравців за фільтром", "Няма гульцоў паводле фільтра"],
+  ["Нет снимка. Нажми «Обновить снимок».", "No snapshot. Press “Refresh snapshot”.", "Немає знімка. Натисніть «Оновити знімок».", "Няма здымка. Націсніце «Абнавіць здымак»."],
+  ["Выбери TM-игрока для связи", "Select a TM player to link", "Оберіть TM-гравця для зв’язку", "Абярыце TM-гульца для сувязі"],
+  ["Выбери игроков и Mantra-позицию", "Select players and a Mantra position", "Оберіть гравців і позицію Mantra", "Абярыце гульцоў і пазіцыю Mantra"],
+  ["Очистить Mantra-позиции у всех игроков League One? Это нельзя отменить.", "Clear Mantra positions for every League One player? This cannot be undone.", "Очистити позиції Mantra в усіх гравців League One? Це не можна скасувати.", "Ачысціць пазіцыі Mantra ва ўсіх гульцоў League One? Гэта нельга адмяніць."],
+  ["Ручная связь удалена", "Manual link removed", "Ручний зв’язок видалено", "Ручная сувязь выдалена"],
+  ["Синхронизация TM + FotMob…", "Syncing TM + FotMob…", "Синхронізація TM + FotMob…", "Сінхранізацыя TM + FotMob…"],
+  ["Синхронизация завершена", "Sync finished", "Синхронізацію завершено", "Сінхранізацыя завершана"],
+  ["Синхронизация матчей FotMob…", "Syncing FotMob matches…", "Синхронізація матчів FotMob…", "Сінхранізацыя матчаў FotMob…"],
+  ["Снимок ещё не собран", "Snapshot has not been built yet", "Знімок ще не зібрано", "Здымак яшчэ не сабраны"],
+  ["Нет значений", "No values", "Немає значень", "Няма значэнняў"],
+  ["Нет клубов", "No clubs", "Немає клубів", "Няма клубаў"],
+  ["Нет unmatched TM", "No unmatched TM players", "Немає unmatched TM", "Няма unmatched TM"],
+  ["— выбрать TM —", "— select TM —", "— обрати TM —", "— абраць TM —"],
+  ["Тот же клуб", "Same club", "Той самий клуб", "Той жа клуб"],
+  ["Другие", "Others", "Інші", "Іншыя"],
+  ["Связать с TM", "Link to TM", "Зв’язати з TM", "Звязаць з TM"],
+  ["Осн.", "Pri.", "Осн.", "Асн."],
+  ["Отвязать", "Unlink", "Відв’язати", "Адвязаць"],
+  ["Автоголы", "Own goals", "Автоголи", "Аўтагалы"],
+  ["Голы + передачи", "Goals + assists", "Голи + передачі", "Галы + перадачы"],
+  ["Жёлтые / красные", "Yellow / red", "Жовті / червоні", "Жоўтыя / чырвоныя"],
+  ["Игрок и клуб", "Player and club", "Гравець і клуб", "Гулец і клуб"],
+  ["Минуты", "Minutes", "Хвилини", "Хвіліны"],
+  ["Мин", "Min", "Хв", "Хв"],
+  ["Минуты по матчам", "Minutes by match", "Хвилини по матчах", "Хвіліны па матчах"],
+  ["Незабитые пенальти", "Missed penalties", "Незабиті пенальті", "Незабітыя пенальці"],
+  ["Нет минут", "No minutes", "Немає хвилин", "Няма хвілін"],
+  ["Отбитые пенальти", "Saved penalties", "Відбиті пенальті", "Адбітыя пенальці"],
+  ["Открыть фото", "Open photo", "Відкрити фото", "Адкрыць фота"],
+  ["оценка FotMob, позиция, минуты", "FotMob rating, position, minutes", "оцінка FotMob, позиція, хвилини", "ацэнка FotMob, пазіцыя, хвіліны"],
+  ["пас", "assist", "пас", "пас"],
+  ["Пенальти", "Penalties", "Пенальті", "Пенальці"],
+  ["посл. 5", "last 5", "ост. 5", "апошн. 5"],
+  ["Последние 5", "Last 5", "Останні 5", "Апошнія 5"],
+  ["Сейвы", "Saves", "Сейви", "Сейвы"],
+  ["старт", "start", "старт", "старт"],
+  ["туров", "rounds", "турів", "тураў"],
+  ["Голы", "Goals", "Голи", "Галы"],
+  ["Жёлтые карточки", "Yellow cards", "Жовті картки", "Жоўтыя карткі"],
+  ["Забитые пенальти", "Penalties scored", "Забиті пенальті", "Забітыя пенальці"],
+  ["Игры (выходы на поле)", "Apps (appearances)", "Ігри (виходи на поле)", "Гульні (выхады на поле)"],
+  ["Красные карточки", "Red cards", "Червоні картки", "Чырвоныя карткі"],
+  ["Минуты за сезон", "Minutes this season", "Хвилини за сезон", "Хвіліны за сезон"],
+  ["Пасы (ассисты)", "Assists", "Паси (асисти)", "Пасы (асісты)"],
+  ["Пропущенные голы", "Goals conceded", "Пропущені голи", "Прапушчаныя галы"],
+  ["Самая частая позиция на поле", "Most frequent on-pitch position", "Найчастіша позиція на полі", "Найчасцейшая пазіцыя на полі"],
+  ["Средняя оценка FotMob за последние 5 матчей", "Average FotMob rating over the last 5 matches", "Середня оцінка FotMob за останні 5 матчів", "Сярэдняя ацэнка FotMob за апошнія 5 матчаў"],
+  ["Средняя оценка FotMob за сезон", "Average FotMob rating this season", "Середня оцінка FotMob за сезон", "Сярэдняя ацэнка FotMob за сезон"],
+  ["Старты в основе", "Starts", "Старти в основі", "Старты ў аснове"],
+  ["АГ", "OG", "АГ", "АГ"],
+  ["Нп", "MP", "Нп", "Нп"],
+  ["Оп", "SP", "Оп", "Оп"],
+  ["Пен", "Pen", "Пен", "Пен"],
+  ["Пр", "GC", "Пр", "Пр"],
+  ["Св", "Sv", "Св", "Св"],
+  ["Ст", "St", "Ст", "Ст"],
+  ["Газетка", "Gazette", "Газетка", "Газетка"],
+  ["Эксп.", "Exp.", "Експ.", "Эксп."],
+  ["Эксперты (Sorare % / Athletic / FFS)", "Experts (Sorare % / Athletic / FFS)", "Експерти (Sorare % / Athletic / FFS)", "Эксперты (Sorare % / Athletic / FFS)"],
+  ["Вероятность основы по экспертам ≥ 50%", "Expert starting probability ≥ 50%", "Ймовірність основи за експертами ≥ 50%", "Імавернасць асновы паводле экспертаў ≥ 50%"],
+  ["Все матчи / все клубы", "All matches / all clubs", "Усі матчі / усі клуби", "Усе матчы / усе клубы"],
+  ["Выбери игрока Mantra из того же клуба.", "Select a Mantra player from the same club.", "Оберіть гравця Mantra з того самого клубу.", "Абярыце гульца Mantra з таго ж клуба."],
+  ["Незабитый пенальти", "Missed penalty", "Незабитий пенальті", "Незабіты пенальці"],
+  ["красная", "red", "червона", "чырвоная"],
+  ["жёлтая", "yellow", "жовта", "жоўтая"],
+  ["вторая жёлтая", "second yellow", "друга жовта", "другая жоўтая"],
+  ["Вероятность основы · SorareInside", "Starting probability · SorareInside", "Ймовірність основи · SorareInside", "Імавернасць асновы · SorareInside"],
+  ["Вероятность основы по мнению экспертов", "Starting probability according to the experts", "Ймовірність основи на думку експертів", "Імавернасць асновы на думку экспертаў"],
+  ["The Athletic · в основе", "The Athletic · starting XI", "The Athletic · в основі", "The Athletic · у аснове"],
+  ["Fantasy Football Scout · в основе", "Fantasy Football Scout · starting XI", "Fantasy Football Scout · в основі", "Fantasy Football Scout · у аснове"],
+  ["Ошибка отчёта", "Report error", "Помилка звіту", "Памылка справаздачы"],
+  ["Ошибка свободных", "Unpicked error", "Помилка вільних", "Памылка вольных"],
+  ["Ошибка экспорта", "Export error", "Помилка експорту", "Памылка экспарту"],
+  ["Ошибка Sorare", "Sorare error", "Помилка Sorare", "Памылка Sorare"],
 ];
 
 const messages = new Map(
@@ -881,6 +1064,16 @@ function translateDynamic(text) {
       many: { ru: "матчей", uk: "матчів", be: "матчаў" },
     })}`;
   }
+  match = text.match(/^(\d+) (справочник|справочника|справочников)$/);
+  if (match) {
+    const count = Number(match[1]);
+    return `${count} ${pluralUnit(activeLocale, count, {
+      en: count === 1 ? "reference" : "references",
+      one: { ru: "справочник", uk: "довідник", be: "даведнік" },
+      few: { ru: "справочника", uk: "довідники", be: "даведнікі" },
+      many: { ru: "справочников", uk: "довідників", be: "даведнікаў" },
+    })}`;
+  }
   match = text.match(/^Тур (\d+)$/);
   if (match) return `${tr("Тур")} ${match[1]}`;
   match = text.match(/^тур (\d+)$/);
@@ -896,6 +1089,8 @@ function translateDynamic(text) {
   if (match) return `${tr("Тур")} ${match[1]} (${tr(match[2])})`;
   match = text.match(/^Ошибка(?::| Live:)\s*(.+)$/);
   if (match) return `${tr("Ошибка")}: ${match[1]}`;
+  match = text.match(/^(Ошибка отчёта|Ошибка свободных|Ошибка экспорта|Ошибка Sorare):\s*(.+)$/);
+  if (match) return `${tr(match[1])}: ${match[2]}`;
   match = text.match(/^Подключено до (.+)$/);
   if (match) {
     return {
@@ -1007,6 +1202,120 @@ function translateDynamic(text) {
   if (match) {
     return `${{ en: "also", uk: "також", be: "таксама" }[activeLocale]}: ${match[1]}`;
   }
+  match = text.match(/^Доступно через (\d+) мин$/);
+  if (match) {
+    return {
+      ru: text,
+      en: `Available in ${match[1]} min`,
+      uk: `Доступно через ${match[1]} хв`,
+      be: `Даступна праз ${match[1]} хв`,
+    }[activeLocale];
+  }
+  match = text.match(/^Лига (.+): составы (\d+), аукционы (\d+)\/(\d+)$/);
+  if (match) {
+    return {
+      ru: text,
+      en: `League ${match[1]}: squads ${match[2]}, auctions ${match[3]}/${match[4]}`,
+      uk: `Ліга ${match[1]}: склади ${match[2]}, аукціони ${match[3]}/${match[4]}`,
+      be: `Ліга ${match[1]}: склады ${match[2]}, аўкцыёны ${match[3]}/${match[4]}`,
+    }[activeLocale];
+  }
+  match = text.match(/^Лучший XI: (.+) · оценка (.+)\.$/);
+  if (match) {
+    return {
+      ru: text,
+      en: `Best XI: ${match[1]} · score ${match[2]}.`,
+      uk: `Найкращий XI: ${match[1]} · оцінка ${match[2]}.`,
+      be: `Найлепшы XI: ${match[1]} · ацэнка ${match[2]}.`,
+    }[activeLocale];
+  }
+  match = text.match(/^Выбрано: (\d+)$/);
+  if (match) {
+    return {
+      ru: text,
+      en: `Selected: ${match[1]}`,
+      uk: `Обрано: ${match[1]}`,
+      be: `Выбрана: ${match[1]}`,
+    }[activeLocale];
+  }
+  match = text.match(/^(\d+) свободных$/);
+  if (match) {
+    return {
+      ru: text,
+      en: `${match[1]} unpicked`,
+      uk: `${match[1]} вільних`,
+      be: `${match[1]} вольных`,
+    }[activeLocale];
+  }
+  match = text.match(/^видно (\d+)$/);
+  if (match) {
+    return {
+      ru: text,
+      en: `visible ${match[1]}`,
+      uk: `видно ${match[1]}`,
+      be: `бачна ${match[1]}`,
+    }[activeLocale];
+  }
+  match = text.match(/^(\d+) выбр\.$/);
+  if (match) {
+    return {
+      ru: text,
+      en: `${match[1]} sel.`,
+      uk: `${match[1]} обр.`,
+      be: `${match[1]} выбр.`,
+    }[activeLocale];
+  }
+  match = text.match(/^T(\d+): нет данных$/);
+  if (match) {
+    return {
+      ru: text,
+      en: `T${match[1]}: no data`,
+      uk: `T${match[1]}: немає даних`,
+      be: `T${match[1]}: няма даных`,
+    }[activeLocale];
+  }
+  match = text.match(/^Вне заявки: (.+)$/);
+  if (match) {
+    return `${tr("Вне заявки")}: ${match[1]}`;
+  }
+  match = text.match(
+    /^Нужен минимум 1 вратарь и 10 полевых, которые сложатся в схему Mantra\. Сейчас: (\d+) вр\. и (\d+) полевых\.$/,
+  );
+  if (match) {
+    return {
+      ru: text,
+      en: `Need at least 1 goalkeeper and 10 outfield players who can fill a Mantra formation. Now: ${match[1]} GK and ${match[2]} outfield.`,
+      uk: `Потрібен мінімум 1 воротар і 10 польових, які складуть схему Mantra. Зараз: ${match[1]} вр. і ${match[2]} польових.`,
+      be: `Патрэбны мінімум 1 брамнік і 10 палявых, якія складуць схему Mantra. Зараз: ${match[1]} бр. і ${match[2]} палявых.`,
+    }[activeLocale];
+  }
+  match = text.match(/^(.+): сортировать по (убыванию|возрастанию)$/);
+  if (match) {
+    return `${tr(match[1])}: ${tr(`сортировать по ${match[2]}`)}`;
+  }
+  match = text.match(
+    /^(.+): по (убыванию|возрастанию)\. Сортировать по (возрастанию|убыванию)$/,
+  );
+  if (match) {
+    return `${tr(match[1])}: ${tr(`по ${match[2]}`)}. ${{
+      en: "Sort",
+      uk: "Сортувати",
+      be: "Сартаваць",
+    }[activeLocale]} ${tr(`по ${match[3]}`)}`;
+  }
+  match = text.match(/^Карточка \((красная|жёлтая|вторая жёлтая)\) · (.+)$/);
+  if (match) {
+    return `${tr("Карточка")} (${tr(match[1])}) · ${match[2]}`;
+  }
+  match = text.match(/^гол (\d+)%×(.+)$/);
+  if (match) {
+    return {
+      ru: text,
+      en: `goal ${match[1]}%×${match[2]}`,
+      uk: `гол ${match[1]}%×${match[2]}`,
+      be: `гол ${match[1]}%×${match[2]}`,
+    }[activeLocale];
+  }
   for (const prefix of [
     "лидер",
     "лига",
@@ -1019,6 +1328,12 @@ function translateDynamic(text) {
     "детали",
     "состав",
     "подходят",
+    "туры",
+    "туров",
+    "оценка",
+    "форма",
+    "возврат",
+    "видно",
   ]) {
     if (text.startsWith(`${prefix}: `)) return `${tr(prefix)}: ${text.slice(prefix.length + 2)}`;
     if (text.startsWith(`${prefix} `)) return `${tr(prefix)} ${text.slice(prefix.length + 1)}`;
@@ -1031,13 +1346,15 @@ export function tr(source) {
   const text = String(source);
   const exact = messages.get(text) || messages.get(text.replace(/\s+/g, " ").trim());
   if (exact) return exact[activeLocale] || text;
+  const dynamic = translateDynamic(text);
+  if (dynamic !== text) return dynamic;
   if (text.includes(" · ")) {
     return text
       .split(" · ")
       .map((part) => tr(part))
       .join(" · ");
   }
-  return translateDynamic(text);
+  return text;
 }
 
 function translateTextNode(node) {

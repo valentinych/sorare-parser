@@ -446,6 +446,7 @@ export async function fetchTourMatchIds(tourId: number): Promise<number[]> {
 import type { MantraDivisionDef } from "../lib/liveLeagues.js";
 import {
   LIVE_LEAGUES,
+  preferPlayableMantraTour,
   shouldAutoOpenNextTour,
   tourHasActiveDeadline,
 } from "../lib/liveLeagues.js";
@@ -738,12 +739,14 @@ async function maybeAutoOpenLockedNextTour(
   const kickedOff =
     probe.round != null && kickedOffRound ? kickedOffRound(probe.round) : false;
   const hasDeadline = tourHasActiveDeadline(probe);
+  const playable = probe.matches.some((m) => m.matchId != null);
   if (
     !shouldAutoOpenNextTour(currentRound, {
       round: probe.round,
       locked,
       kickedOff,
       hasDeadline,
+      playable,
     })
   ) {
     return current;
@@ -790,7 +793,25 @@ export async function fetchMantraToursForDivisions(
         `Mantra ${t.division}: resolved tour ${tourId} (fallback was ${t.tourId})`,
       );
     }
-    out.push(await fetchDivisionTour(t, tourId));
+    let tour = await fetchDivisionTour(t, tourId);
+    if (!tour.matches.some((m) => m.matchId != null) && tourId > 0) {
+      try {
+        const previous = await fetchDivisionTour(t, tourId - 1);
+        const picked = preferPlayableMantraTour(tour, previous);
+        if (picked !== tour) {
+          console.log(
+            `Mantra ${t.division}: tour ${tourId} round ${tour.round} has no match pages; staying on tour ${picked.tourId} round ${picked.round}`,
+          );
+          tour = picked;
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!/→ 404\b/.test(msg)) {
+          console.warn(`Mantra ${t.division} previous tour ${tourId - 1} failed:`, msg);
+        }
+      }
+    }
+    out.push(tour);
   }
   return maybeAutoOpenLockedNextTour(out, divisions, opts?.kickedOffRound);
 }

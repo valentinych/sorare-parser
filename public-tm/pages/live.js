@@ -15,7 +15,7 @@ import {
   slugifyLeagueName,
   tr,
   apiJson,
-} from "../core.js?v=11";
+} from "../core.js?v=14";
 
 let livePayload = null;
 /** @type {string | null} selected round tab; null follows server currentRound */
@@ -29,16 +29,25 @@ let liveClientTimer = null;
 let liveLoading = false;
 /** Bumps on each live fetch so rapid switches keep the latest response. */
 let liveFetchGen = 0;
-/** Same Latin names as the header league selector — not i18n Cyrillic. */
+/** Same Latin names as `/tables` and Builder — not i18n Cyrillic. */
 const LIVE_SELECT_LABELS = {
   ekstraklasa: "Ekstraklasa",
   "premier-league": "Premier League",
   championship: "Championship",
+  "league-one": "League One",
   "super-lig": "Süper Lig",
   "serie-a": "Serie A",
   bundesliga: "Bundesliga",
+  "ligue-1": "Ligue 1",
+  "la-liga": "La Liga",
+  eredivisie: "Eredivisie",
+  "jupiler-pro-league": "Pro League",
+  "primeira-liga": "Primeira Liga",
+  upl: "UPL",
+  mls: "MLS",
+  brasileirao: "Brasileirão",
 };
-/** Live `#live` dropdown: only leagues wired in `/live/leagues`. */
+/** Live `#live` dropdown fallback: same set as Builder until `/live/leagues` loads. */
 const LIVE_SELECT_FALLBACK = [
   { slug: "ekstraklasa", name: LIVE_SELECT_LABELS.ekstraklasa, tmCompetition: "PL1" },
   { slug: "serie-a", name: LIVE_SELECT_LABELS["serie-a"], tmCompetition: "IT1" },
@@ -46,9 +55,33 @@ const LIVE_SELECT_FALLBACK = [
   { slug: "premier-league", name: LIVE_SELECT_LABELS["premier-league"], tmCompetition: "GB1" },
   { slug: "championship", name: LIVE_SELECT_LABELS.championship, tmCompetition: "GB2" },
   { slug: "super-lig", name: LIVE_SELECT_LABELS["super-lig"], tmCompetition: "TR1" },
+  { slug: "ligue-1", name: LIVE_SELECT_LABELS["ligue-1"], tmCompetition: "FR1" },
+  { slug: "la-liga", name: LIVE_SELECT_LABELS["la-liga"], tmCompetition: "ES1" },
+  { slug: "eredivisie", name: LIVE_SELECT_LABELS.eredivisie, tmCompetition: "NL1" },
+  { slug: "jupiler-pro-league", name: LIVE_SELECT_LABELS["jupiler-pro-league"], tmCompetition: "BE1" },
+  { slug: "primeira-liga", name: LIVE_SELECT_LABELS["primeira-liga"], tmCompetition: "PO1" },
+  { slug: "upl", name: LIVE_SELECT_LABELS.upl, tmCompetition: "UKR1" },
+  { slug: "mls", name: LIVE_SELECT_LABELS.mls, tmCompetition: "MLS1" },
+  { slug: "brasileirao", name: LIVE_SELECT_LABELS.brasileirao, tmCompetition: "BRA1" },
+  { slug: "league-one", name: LIVE_SELECT_LABELS["league-one"], tmCompetition: "GB3" },
 ];
 /** @type {{ slug: string, name: string, tmCompetition: string }[]} */
 let liveLeaguesCatalog = [];
+/** Cross-league filter: clubs from the logged-in manager's Mantra squads. */
+const LIVE_MY_TEAMS_SLUG = "my-teams";
+const LIVE_MY_TEAMS_LABEL = "Мои команды";
+const LIVE_MY_TEAM_COLUMNS = [
+  ["live", "LIVE"],
+  ["xi", "XI"],
+  ["bench", "Запас"],
+];
+const LIVE_MY_TEAM_CHIP_CLASS = {
+  pending: "is-pending",
+  unused: "is-unused",
+  live: "is-live",
+  played: "is-played",
+};
+let liveMyTeamsMode = false;
 
 function liveSelectCompetitions(allCompetitions, liveLeagues) {
   const catalog = liveLeagues?.length ? liveLeagues : LIVE_SELECT_FALLBACK;
@@ -120,6 +153,7 @@ function liveLeagueDisplayName(slug, c) {
 }
 
 function liveLeagueChromeLabel() {
+  if (liveMyTeamsMode) return LIVE_MY_TEAMS_LABEL;
   const slug = competitionLeagueSlug();
   const liveList = liveSelectCompetitions(competitions, liveLeaguesCatalog);
   const cur = liveList.find((c) => c.liveSlug === slug || c.id === activeCompetitionId);
@@ -132,10 +166,29 @@ function paintLiveLeagueChrome() {
   if (nameEl) nameEl.textContent = label;
   const round = liveSelectedRound ?? livePayload?.round ?? livePayload?.currentRound ?? null;
   const metaEl = document.getElementById("league-meta");
-  if (metaEl) metaEl.textContent = round != null && round !== "" ? liveRoundLabel(round) : "";
+  if (metaEl) {
+    metaEl.textContent = liveMyTeamsMode
+      ? "клубы из составов"
+      : round != null && round !== ""
+        ? liveRoundLabel(round)
+        : "";
+  }
   document.title = `Live · ${label} · Mantra Helper`;
   const fotTitle = document.getElementById("live-fotmob-title");
-  if (fotTitle) fotTitle.textContent = `FotMob · ${label}`;
+  if (fotTitle) {
+    fotTitle.hidden = liveMyTeamsMode;
+    if (!liveMyTeamsMode) fotTitle.textContent = `FotMob · ${label}`;
+  }
+  const tours = document.getElementById("mantra-tours");
+  if (tours) tours.hidden = liveMyTeamsMode;
+  const help = document.querySelector("#view-live .live-help");
+  if (help) help.hidden = liveMyTeamsMode;
+  const layout = document.querySelector("#view-live .live-layout");
+  if (layout) layout.hidden = liveMyTeamsMode;
+  if (liveMyTeamsMode) {
+    const detail = document.getElementById("live-detail");
+    if (detail) detail.hidden = true;
+  }
 }
 
 async function loadLiveLeaguesFromApi() {
@@ -608,32 +661,7 @@ function renderMantraTours() {
         .map((m) => {
           const hasMatchId = m.matchId != null && Number.isFinite(Number(m.matchId));
           const calc = hasMatchId ? computed[String(m.matchId)] : null;
-          const homeGoals = calc ? calc.home.goals : m.home.goals;
-          const awayGoals = calc ? calc.away.goals : m.away.goals;
-          const hg = homeGoals ?? "—";
-          const ag = awayGoals ?? "—";
-          const pendingXi = !calc;
-          const cls =
-            `mantra-match` +
-            (calc ? " is-computed" : "") +
-            (pendingXi ? " is-pending-xi" : "") +
-            (!hasMatchId ? " is-pair-only" : "");
-          const tag = hasMatchId ? "button" : "div";
-          const attrs = hasMatchId
-            ? `type="button" data-mantra-match="${m.matchId}"`
-            : `role="group" title="Пара тура · XI ещё не выставлен"`;
-          return `<${tag} class="${cls}" ${attrs}>
-            ${renderMantraMatchHalf("home", m.home, calc?.home)}
-            <span class="mantra-match-score" aria-label="${esc(`${hg}:${ag}`)}">
-              <span class="mantra-score-box">
-                <span class="mantra-score-num">${esc(String(hg))}</span>
-                <span class="mantra-score-div" aria-hidden="true"></span>
-                <span class="mantra-score-num">${esc(String(ag))}</span>
-              </span>
-              ${pendingXi ? `<span class="mantra-xi-pending">XI</span>` : ""}
-            </span>
-            ${renderMantraMatchHalf("away", m.away, calc?.away)}
-          </${tag}>`;
+          return renderMantraPair(m, calc);
         })
         .join("");
       const pairN = (t.matches || []).length;
@@ -663,11 +691,58 @@ function renderMantraTours() {
   renderIdealStandings();
   syncLivePinCheckbox();
 
-  for (const btn of grid.querySelectorAll("[data-mantra-match]")) {
+  bindMantraPairClicks(grid);
+}
+
+function bindMantraPairClicks(root) {
+  for (const btn of root.querySelectorAll("[data-mantra-match]")) {
     btn.addEventListener("click", () => {
-      openMantraMatchDialog(Number(btn.getAttribute("data-mantra-match")));
+      openMantraMatchDialog(
+        Number(btn.getAttribute("data-mantra-match")),
+        btn.getAttribute("data-mantra-league"),
+      );
     });
   }
+}
+
+function renderMantraPair(m, calc, meta) {
+  const hasMatchId = m.matchId != null && Number.isFinite(Number(m.matchId));
+  const homeGoals = calc ? calc.home.goals : m.home?.goals;
+  const awayGoals = calc ? calc.away.goals : m.away?.goals;
+  const hg = homeGoals ?? "—";
+  const ag = awayGoals ?? "—";
+  const tourHasScore =
+    m.home?.score != null ||
+    m.away?.score != null ||
+    m.home?.scoredCount != null ||
+    m.away?.scoredCount != null;
+  const pendingXi = !calc && !tourHasScore;
+  const cls =
+    `mantra-match` +
+    (calc ? " is-computed" : "") +
+    (pendingXi ? " is-pending-xi" : "") +
+    (!hasMatchId ? " is-pair-only" : "");
+  const tag = hasMatchId ? "button" : "div";
+  const leagueAttr = meta?.leagueSlug ? ` data-mantra-league="${esc(meta.leagueSlug)}"` : "";
+  const attrs = hasMatchId
+    ? `type="button" data-mantra-match="${m.matchId}"${leagueAttr}`
+    : `role="group" title="Пара тура · XI ещё не выставлен"`;
+  const flag = meta?.leagueFlag
+    ? `<span class="mantra-match-flag" title="${esc(meta.leagueName || "")}">${esc(meta.leagueFlag)}</span>`
+    : "";
+  return `<${tag} class="${cls}" ${attrs}>
+    ${renderMantraMatchHalf("home", m.home, calc?.home)}
+    <span class="mantra-match-score" aria-label="${esc(`${hg}:${ag}`)}">
+      ${flag}
+      <span class="mantra-score-box">
+        <span class="mantra-score-num">${esc(String(hg))}</span>
+        <span class="mantra-score-div" aria-hidden="true"></span>
+        <span class="mantra-score-num">${esc(String(ag))}</span>
+      </span>
+      ${pendingXi ? `<span class="mantra-xi-pending">XI</span>` : ""}
+    </span>
+    ${renderMantraMatchHalf("away", m.away, calc?.away)}
+  </${tag}>`;
 }
 
 /** Players who actually appeared — denominator for avg (DNP / not on pitch excluded). */
@@ -789,7 +864,12 @@ function renderMantraMiniPosLines(calcSide) {
 function renderMantraMatchHalf(side, team, calcSide) {
   const name = team?.teamName || "—";
   const total = calcSide ? calcSide.total : team?.score;
-  const n = mantraActiveCount(calcSide);
+  const tourCount = Number(team?.scoredCount);
+  const n = calcSide
+    ? mantraActiveCount(calcSide)
+    : Number.isFinite(tourCount)
+      ? tourCount
+      : 0;
   const live = mantraSideIsLive(calcSide);
   const ptsLabel =
     total != null && Number.isFinite(Number(total)) ? formatMantraPts(total) : "—";
@@ -1089,7 +1169,8 @@ let mantraDialogMatchId = null;
 let mantraDialogXiSig = "";
 
 function computedMatchFromLive(matchId) {
-  return livePayload?.mantra?.computed?.[String(matchId)] ?? null;
+  const id = String(matchId);
+  return livePayload?.mantra?.computed?.[id] ?? livePayload?.myTeams?.computed?.[id] ?? null;
 }
 
 function tourMatchFromLive(matchId) {
@@ -1097,7 +1178,7 @@ function tourMatchFromLive(matchId) {
     const m = (t.matches || []).find((x) => Number(x.matchId) === Number(matchId));
     if (m) return m;
   }
-  return null;
+  return (livePayload?.myTeams?.pairs || []).find((x) => Number(x.matchId) === Number(matchId)) || null;
 }
 
 function mantraXiSignature(match) {
@@ -1204,7 +1285,7 @@ function refreshOpenMantraDialogFromLive() {
   );
 }
 
-async function openMantraMatchDialog(matchId) {
+async function openMantraMatchDialog(matchId, leagueSlug) {
   const dlg = document.getElementById("mantra-dialog");
   if (!dlg || matchId == null) return;
   const alreadyOpen = mantraDialogMatchId === matchId && dlg.open;
@@ -1230,8 +1311,8 @@ async function openMantraMatchDialog(matchId) {
 
   try {
     const qs = new URLSearchParams();
-    const league = competitionLeagueSlug();
-    if (league) qs.set("league", league);
+    const league = leagueSlug || (liveMyTeamsMode ? "" : competitionLeagueSlug());
+    if (league && league !== LIVE_MY_TEAMS_SLUG) qs.set("league", league);
     const round =
       liveSelectedRound ?? livePayload?.round ?? livePayload?.currentRound ?? null;
     if (round != null && round !== "") qs.set("round", String(round));
@@ -1342,16 +1423,37 @@ function renderLiveRoundTabs() {
   }
 }
 
+function myTeamPlayerCount(mine) {
+  if (!mine?.columns) return 0;
+  return LIVE_MY_TEAM_COLUMNS.reduce((sum, [key]) => sum + (mine.columns[key]?.length || 0), 0);
+}
+
 function renderLiveList() {
   const list = document.getElementById("live-list");
   const meta = document.getElementById("live-meta");
   if (!list || !meta) return;
 
   renderLiveRoundTabs();
+  paintLiveLeagueChrome();
+
+  if (liveMyTeamsMode) {
+    list.innerHTML = "";
+    liveSelectedId = null;
+    const mine = livePayload?.myTeams;
+    const n = myTeamPlayerCount(mine);
+    meta.textContent = !livePayload
+      ? "Загрузка…"
+      : mine?.status === "ok"
+        ? `${LIVE_MY_TEAMS_LABEL} · ${n} игроков`
+        : mine?.message || LIVE_MY_TEAMS_LABEL;
+    renderLiveMyTeams();
+    return;
+  }
 
   if (!livePayload) {
     list.innerHTML = `<p class="live-empty">Нет данных. Подождите обновления poller.</p>`;
     meta.textContent = "—";
+    renderLiveMyTeams();
     return;
   }
 
@@ -1363,6 +1465,7 @@ function renderLiveList() {
   const matches = livePayload.matches || [];
   if (!matches.length) {
     list.innerHTML = `<p class="live-empty">Матчей текущего тура пока нет.</p>`;
+    renderLiveMyTeams();
     return;
   }
 
@@ -1402,6 +1505,73 @@ function renderLiveList() {
       loadLiveDetail(liveSelectedId);
     });
   }
+  renderLiveMyTeams();
+}
+
+function renderMyTeamPlayer(player) {
+  const surname = player.profileUrl
+    ? `<a href="${esc(player.profileUrl)}">${esc(player.surname || "—")}</a>`
+    : esc(player.surname || "—");
+  const score = player.scoreText || "—";
+  const chipClass = LIVE_MY_TEAM_CHIP_CLASS[player.chip] || "is-pending";
+  return `<div class="live-my-player">
+    <span class="live-my-name">${surname}</span>
+    <span class="live-my-flag" title="${esc(player.leagueName || "")}">${esc(player.leagueFlag || "")}</span>
+    <span class="live-my-score ${chipClass}" title="${esc(player.scoreTitle || "")}">${esc(score)}</span>
+    <small>${esc(player.clubName || "")}</small>
+  </div>`;
+}
+
+function renderLiveMyTeams() {
+  const el = document.getElementById("live-my-teams");
+  if (!el) return;
+  if (!liveMyTeamsMode) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  el.hidden = false;
+  const mine = livePayload?.myTeams;
+  if (!livePayload) {
+    el.innerHTML = `<p class="live-empty">Загрузка…</p>`;
+    return;
+  }
+  if (!mine || mine.status !== "ok") {
+    el.innerHTML = `<p class="live-empty">${esc(mine?.message || "Войдите и укажите Mantra Manager ID, чтобы увидеть игроков своих команд.")}</p>`;
+    return;
+  }
+  const pairs = mine.pairs || [];
+  const players = myTeamPlayerCount(mine);
+  if (!pairs.length && !players) {
+    el.innerHTML = `<p class="live-empty">${esc(mine.message || "Нет матчей ваших команд в текущем туре.")}</p>`;
+    return;
+  }
+  const pairGrid = pairs.length
+    ? `<div class="live-my-pairs">${pairs
+        .map((pair) => {
+          const calc = pair.matchId != null ? mine.computed?.[String(pair.matchId)] : null;
+          return renderMantraPair(pair, calc, pair);
+        })
+        .join("")}</div>`
+    : `<p class="live-my-empty">Нет матчей ваших команд в текущем туре.</p>`;
+  const playerGrid = players
+    ? `<h2 class="live-section-title">LIVE игроки</h2>
+    <div class="live-my-teams-grid">
+      ${LIVE_MY_TEAM_COLUMNS.map(([key, label]) => {
+        const rows = mine.columns?.[key] || [];
+        const body = rows.length
+          ? rows.map(renderMyTeamPlayer).join("")
+          : `<p class="live-my-empty">Пусто</p>`;
+        return `<section class="live-my-col"><h3>${esc(label)}</h3>${body}</section>`;
+      }).join("")}
+    </div>`
+    : `<p class="live-my-empty">${esc(mine.message || "Нет игроков в опубликованных составах текущего тура.")}</p>`;
+  el.innerHTML = `<section class="live-my-matches">
+      <h2 class="live-section-title">Матчи</h2>
+      ${pairGrid}
+    </section>
+    ${playerGrid}`;
+  bindMantraPairClicks(el);
 }
 
 async function loadLiveDetail(matchId) {
@@ -1451,6 +1621,7 @@ async function loadLiveDetail(matchId) {
 }
 
 async function fetchIdealStandings({ retryOnMiss = true } = {}) {
+  if (liveMyTeamsMode) return;
   const gen = liveFetchGen;
   try {
     const qs = new URLSearchParams();
@@ -1502,9 +1673,9 @@ async function fetchLiveRound({ silent = true } = {}) {
   let attempt = 0;
   try {
     const qs = new URLSearchParams();
-    const league = competitionLeagueSlug();
+    const league = liveRequestLeague();
     if (league) qs.set("league", league);
-    if (livePinnedRound && liveSelectedRound != null && liveSelectedRound !== "") {
+    if (!liveMyTeamsMode && livePinnedRound && liveSelectedRound != null && liveSelectedRound !== "") {
       qs.set("round", String(liveSelectedRound));
     }
     qs.set("format", "json");
@@ -1555,10 +1726,12 @@ async function fetchLiveRound({ silent = true } = {}) {
     syncLiveHash();
     paintLiveLeagueChrome();
     renderLiveList();
-    renderMantraTours();
-    void fetchIdealStandings();
-    refreshOpenMantraDialogFromLive();
-    if (liveSelectedId != null) void loadLiveDetail(liveSelectedId);
+    if (!liveMyTeamsMode) {
+      renderMantraTours();
+      void fetchIdealStandings();
+      refreshOpenMantraDialogFromLive();
+      if (liveSelectedId != null) void loadLiveDetail(liveSelectedId);
+    }
   } catch (err) {
     if (gen !== liveFetchGen) return;
     const meta = document.getElementById("live-meta");
@@ -1582,21 +1755,25 @@ function ensureLiveLoaded() {
   // Soft client refresh aligned with server poll (5m) — no overlay (background).
   liveClientTimer = setInterval(() => {
     void fetchLiveRound({ silent: true });
-    void fetchIdealStandings();
+    if (!liveMyTeamsMode) void fetchIdealStandings();
   }, 5 * 60 * 1000);
 }
 
 function syncLiveHash() {
   const qs = new URLSearchParams();
-  const league = competitionLeagueSlug();
+  const league = liveRequestLeague();
   if (league) qs.set("league", league);
-  if (liveSelectedRound != null && liveSelectedRound !== "") {
+  if (!liveMyTeamsMode && liveSelectedRound != null && liveSelectedRound !== "") {
     qs.set("round", String(liveSelectedRound));
   }
   const next = qs.toString() ? `/live?${qs}` : "/live";
   const cur = `${location.pathname}${location.search}`;
   if (cur === next) return;
   history.replaceState(null, "", next);
+}
+
+function liveRequestLeague() {
+  return liveMyTeamsMode ? LIVE_MY_TEAMS_SLUG : competitionLeagueSlug();
 }
 
 function competitionLeagueSlug(compId = activeCompetitionId) {
@@ -1632,29 +1809,39 @@ function resolveCompetitionIdFromLeagueParam(param) {
   return byName?.id ?? null;
 }
 
+function myTeamsOptionHtml() {
+  return `<option value="${LIVE_MY_TEAMS_SLUG}">${esc(LIVE_MY_TEAMS_LABEL)}</option>`;
+}
+
 function fillLiveCompetitionSelect() {
   const sel = document.getElementById("competition-select");
   if (!sel) return;
   const liveList = liveSelectCompetitions(competitions, liveLeaguesCatalog);
   const options = liveList.length ? liveList : competitions;
   if (!options.length) {
-    const slug = competitionLeagueSlug() || "premier-league";
+    const slug = liveMyTeamsMode ? "premier-league" : competitionLeagueSlug() || "premier-league";
     const label = liveLeagueDisplayName(slug);
-    sel.innerHTML = `<option value="${esc(slug)}">${esc(label)}</option>`;
+    sel.innerHTML = `${myTeamsOptionHtml()}<option value="${esc(slug)}">${esc(label)}</option>`;
+    sel.value = liveMyTeamsMode ? LIVE_MY_TEAMS_SLUG : slug;
     paintLiveLeagueChrome();
     return;
   }
-  if (!options.some((c) => c.id === activeCompetitionId || c.liveSlug === competitionLeagueSlug())) {
+  if (
+    !liveMyTeamsMode &&
+    !options.some((c) => c.id === activeCompetitionId || c.liveSlug === competitionLeagueSlug())
+  ) {
     setActiveCompetitionId(options[0].id);
   }
-  sel.innerHTML = options
-    .map((c) => {
-      const slug = c.liveSlug || competitionLeagueSlug(c.id);
-      const label = liveLeagueDisplayName(slug, c);
-      return `<option value="${esc(slug)}">${esc(label)}</option>`;
-    })
-    .join("");
-  sel.value = competitionLeagueSlug();
+  sel.innerHTML =
+    myTeamsOptionHtml() +
+    options
+      .map((c) => {
+        const slug = c.liveSlug || competitionLeagueSlug(c.id);
+        const label = liveLeagueDisplayName(slug, c);
+        return `<option value="${esc(slug)}">${esc(label)}</option>`;
+      })
+      .join("");
+  sel.value = liveMyTeamsMode ? LIVE_MY_TEAMS_SLUG : competitionLeagueSlug();
   paintLiveLeagueChrome();
 }
 
@@ -1666,15 +1853,18 @@ function bindLivePage() {
   document.getElementById("competition-select")?.addEventListener("change", (e) => {
     const slug = String(e.target.value || "").trim();
     if (!slug) return;
-    const id = resolveCompetitionIdFromLeagueParam(slug);
-    if (id) setActiveCompetitionId(id);
+    liveMyTeamsMode = slug === LIVE_MY_TEAMS_SLUG;
+    if (!liveMyTeamsMode) {
+      const id = resolveCompetitionIdFromLeagueParam(slug);
+      if (id) setActiveCompetitionId(id);
+    }
     liveSelectedRound = null;
     livePinnedRound = false;
     liveSelectedId = null;
     livePayload = null;
     paintLiveLeagueChrome();
     renderLiveList();
-    renderMantraTours();
+    if (!liveMyTeamsMode) renderMantraTours();
     syncLiveHash();
     void fetchLiveRound({ silent: false });
   });
@@ -1720,6 +1910,10 @@ function bindLivePage() {
   });
   pageHooks.onAccountChanged = () => {
     syncLivePinCheckbox();
+    if (liveMyTeamsMode) {
+      void fetchLiveRound({ silent: true });
+      return;
+    }
     if (livePayload) {
       renderLiveRoundTabs();
       renderLiveList();
@@ -1735,10 +1929,14 @@ export async function start() {
     bindLivePage();
     await Promise.all([loadLiveLeaguesFromApi(), loadAccount(), loadCompetitionsList()]);
     const qs = new URLSearchParams(location.search);
-    const fromParam = resolveCompetitionIdFromLeagueParam(qs.get("league"));
-    if (fromParam) setActiveCompetitionId(fromParam);
+    const leagueParam = qs.get("league");
+    liveMyTeamsMode = leagueParam === LIVE_MY_TEAMS_SLUG;
+    if (!liveMyTeamsMode) {
+      const fromParam = resolveCompetitionIdFromLeagueParam(leagueParam);
+      if (fromParam) setActiveCompetitionId(fromParam);
+    }
     const round = qs.get("round");
-    if (round != null && round !== "") {
+    if (!liveMyTeamsMode && round != null && round !== "") {
       liveSelectedRound = round;
       livePinnedRound = true;
     }

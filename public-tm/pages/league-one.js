@@ -1,4 +1,4 @@
-import { accountState, apiJson, esc } from "../core.js?v=11";
+import { accountState, apiJson, esc } from "../core.js?v=14";
 
 let leagueOneData = null;
 /** @type {any} */

@@ -5,7 +5,7 @@ import {
   initI18n,
   setUiPreferences,
   tr,
-} from "./i18n.js?v=31";
+} from "./i18n.js?v=36";
 import { googleSignInEnabled } from "./live-draft-access.js?v=1";
 
 initI18n();
@@ -181,7 +181,7 @@ export function slugifyLeagueName(name) {
     .replace(/^-+|-+$/g, "");
 }
 
-/** Human names for the six UI championships — same labels as the header dropdown. */
+/** Human names for Live/Tables/Builder championships — same keys as the header dropdown. */
 export const LEAGUE_UI_LABELS = {
   ekstraklasa: "Экстракласса",
   "serie-a": "Серия А",
@@ -189,6 +189,15 @@ export const LEAGUE_UI_LABELS = {
   "premier-league": "Премьер-лига",
   championship: "Чемпионшип",
   "super-lig": "Суперлига",
+  "ligue-1": "Лига 1",
+  "la-liga": "Ла Лига",
+  eredivisie: "Эредивизи",
+  "jupiler-pro-league": "Про-лига",
+  "primeira-liga": "Примейра-лига",
+  upl: "УПЛ",
+  mls: "MLS",
+  brasileirao: "Бразилейран",
+  "league-one": "League One",
 };
 
 const TM_TO_LEAGUE_SLUG = {
@@ -197,7 +206,16 @@ const TM_TO_LEAGUE_SLUG = {
   L1: "bundesliga",
   GB1: "premier-league",
   GB2: "championship",
+  GB3: "league-one",
   TR1: "super-lig",
+  FR1: "ligue-1",
+  ES1: "la-liga",
+  NL1: "eredivisie",
+  BE1: "jupiler-pro-league",
+  PO1: "primeira-liga",
+  UKR1: "upl",
+  MLS1: "mls",
+  BRA1: "brasileirao",
 };
 
 /**

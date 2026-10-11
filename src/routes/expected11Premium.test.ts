@@ -200,6 +200,55 @@ test("Premium refresh is same-origin POST and forces a squad pull", async (t) =>
   ]);
 });
 
+test("Premium odds refresh is same-origin POST and returns the premium payload", async (t) => {
+  const app = Fastify();
+  const pulls: Array<{ id: number; force: boolean }> = [];
+  const odds: number[] = [];
+  await app.register(expected11PremiumRoutes, {
+    authorize,
+    premiumView: () => ({ rows: [{ mantraPlayerId: 7, winProbability: 0.4 }] }) as never,
+    ensureSquads: (actor, force) => {
+      pulls.push({ id: actor.mantraManagerId ?? 0, force });
+    },
+    refreshOdds: (actor) => {
+      odds.push(actor.mantraManagerId ?? 0);
+    },
+  });
+  t.after(() => app.close());
+
+  const unauthenticated = await app.inject({
+    method: "POST",
+    url: "/api/expected11/premium/refresh-odds",
+  });
+  assert.equal(unauthenticated.statusCode, 401);
+
+  const crossOrigin = await app.inject({
+    method: "POST",
+    url: "/api/expected11/premium/refresh-odds",
+    headers: {
+      "x-test-role": "entitled",
+      origin: "https://evil.example",
+      host: "localhost:3000",
+    },
+  });
+  assert.equal(crossOrigin.statusCode, 403);
+
+  const refresh = await app.inject({
+    method: "POST",
+    url: "/api/expected11/premium/refresh-odds",
+    headers: {
+      "x-test-role": "entitled",
+      origin: "http://localhost:3000",
+      host: "localhost:3000",
+    },
+  });
+  assert.equal(refresh.statusCode, 200);
+  assert.equal(refresh.json().rows[0]?.mantraPlayerId, 7);
+  assert.equal(refresh.json().rows[0]?.winProbability, 0.4);
+  assert.deepEqual(odds, [99]);
+  assert.deepEqual(pulls, [{ id: 99, force: false }]);
+});
+
 test("Premium squad report is entitled-only and requires teamId", async (t) => {
   const app = Fastify();
   await app.register(expected11PremiumRoutes, {

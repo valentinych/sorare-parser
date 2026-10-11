@@ -16,13 +16,14 @@ import {
   mantraToursHaveActiveDeadline,
   preferMantraMatchRound,
   resolveLiveLeague,
+  preferPlayableMantraTour,
   shouldAutoOpenNextTour,
   tourHasActiveDeadline,
   tourHasFirstKickoff,
 } from "./liveLeagues.js";
 
-test("LIVE_LEAGUES includes the six UI championships", () => {
-  const slugs = allLiveLeagues().map((l) => l.slug);
+test("LIVE_LEAGUES core catalog is the original six championships", () => {
+  const slugs = Object.keys(LIVE_LEAGUES);
   assert.deepEqual(slugs, [
     "ekstraklasa",
     "serie-a",
@@ -48,7 +49,8 @@ test("LIVE_LEAGUES includes the six UI championships", () => {
   assert.equal(LIVE_LEAGUES["super-lig"]?.mantraTournamentId, 21);
 });
 
-test("tables extra leagues are wired for /tables but stay off Live poller", () => {
+test("allLiveLeagues matches Builder: core 6 + tables extras + League One", () => {
+  assert.deepEqual(allLiveLeagues().map((l) => l.slug), allBuilderLeagues().map((l) => l.slug));
   assert.deepEqual(allLiveLeagues().map((l) => l.slug), [
     "ekstraklasa",
     "serie-a",
@@ -56,7 +58,19 @@ test("tables extra leagues are wired for /tables but stay off Live poller", () =
     "premier-league",
     "championship",
     "super-lig",
+    "ligue-1",
+    "la-liga",
+    "eredivisie",
+    "jupiler-pro-league",
+    "primeira-liga",
+    "upl",
+    "mls",
+    "brasileirao",
+    "league-one",
   ]);
+});
+
+test("tables extra leagues stay a separate catalog but are on Live", () => {
   const extra = allTablesLeagues().map((l) => l.slug);
   assert.deepEqual(extra.slice(6), [
     "ligue-1",
@@ -69,6 +83,7 @@ test("tables extra leagues are wired for /tables but stay off Live poller", () =
     "brasileirao",
   ]);
   assert.equal(LIVE_LEAGUES["ligue-1"], undefined);
+  assert.equal(allLiveLeagues().some((l) => l.slug === "ligue-1"), true);
   assert.equal(liveLeagueBySlug("ligue-1")?.mantraTournamentId, 4);
   assert.equal(liveLeagueBySlug("ligue-1")?.fotmobLeagueId, 53);
   assert.equal(liveLeagueBySlug("FR1")?.slug, "ligue-1");
@@ -84,7 +99,8 @@ test("tables extra leagues are wired for /tables but stay off Live poller", () =
   assert.equal(liveLeagueBySlug("brasileirao")?.mantraTournamentId, 19);
   assert.equal(liveLeagueBySlug("brasileirao")?.fotmobLeagueId, 268);
   assert.equal(leagueFlagEmoji("ligue-1"), "🇫🇷");
-  assert.equal(leagueFlagEmoji("championship"), "🏴󠁧󠁢󠁥󠁮󠁧󠁿");
+  assert.equal(leagueFlagEmoji("premier-league"), "🏴󠁧󠁢󠁥󠁮󠁧󠁿");
+  assert.equal(leagueFlagEmoji("championship"), "🇬🇧");
   assert.equal(liveLeagueBySlug("ligue-1")?.mantraDivisions[0]?.leagueId, 732);
   assert.equal(liveLeagueBySlug("la-liga")?.mantraDivisions[0]?.leagueId, 664);
   assert.equal(liveLeagueBySlug("upl")?.mantraDivisions.length, 52);
@@ -93,9 +109,9 @@ test("tables extra leagues are wired for /tables but stay off Live poller", () =
   assert.equal(isTablesExtraSlug("league-one"), false);
 });
 
-test("England 3 is Premium-only, not Live or /tables", () => {
+test("England 3 is on Live and Premium, not /tables", () => {
   assert.equal(LIVE_LEAGUES["league-one"], undefined);
-  assert.equal(allLiveLeagues().some((l) => l.slug === "league-one"), false);
+  assert.equal(allLiveLeagues().some((l) => l.slug === "league-one"), true);
   assert.equal(allTablesLeagues().some((l) => l.slug === "league-one"), false);
   assert.equal(PREMIUM_EXTRA_LEAGUES["league-one"]?.mantraTournamentId, 26);
   assert.equal(liveLeagueBySlug("league-one")?.fotmobLeagueId, 108);
@@ -114,7 +130,7 @@ test("England 3 is Premium-only, not Live or /tables", () => {
     "super-lig",
     "league-one",
   ]);
-  assert.equal(leagueFlagEmoji("league-one"), "🏴󠁧󠁢󠁥󠁮󠁧󠁿");
+  assert.equal(leagueFlagEmoji("league-one"), "🏴󠁧󠁢󠁷󠁬󠁳󠁿");
 });
 
 test("Builder catalog is Live 6 + /tables extras + League One", () => {
@@ -261,6 +277,29 @@ test("shouldAutoOpenNextTour when locked or FotMob first kickoff, and ahead", ()
   assert.equal(shouldAutoOpenNextTour(null, { round: 1, locked: true }), true);
   assert.equal(shouldAutoOpenNextTour(null, { round: 1, locked: false, kickedOff: true }), true);
   assert.equal(shouldAutoOpenNextTour(2, null), false);
+  assert.equal(
+    shouldAutoOpenNextTour(2, { round: 3, locked: false, kickedOff: true, playable: false }),
+    false,
+  );
+});
+
+test("preferPlayableMantraTour stays on the previous tour when Round nav is an inactive shell", () => {
+  const shell = {
+    round: 3,
+    matches: [
+      { matchId: null },
+      { matchId: null },
+    ],
+  };
+  const playable = {
+    round: 2,
+    matches: [{ matchId: 101792 }, { matchId: 101793 }],
+  };
+  assert.equal(preferPlayableMantraTour(shell, playable), playable);
+  assert.equal(preferPlayableMantraTour(playable, shell), playable);
+  const lastSeason = { round: 38, matches: [{ matchId: 1 }] };
+  const newSeason = { round: 1, matches: [{ matchId: null }] };
+  assert.equal(preferPlayableMantraTour(newSeason, lastSeason), newSeason);
 });
 
 test("tourHasFirstKickoff is live, finished, or kickoff already passed", () => {

@@ -3,7 +3,7 @@ import {
   esc,
   formatPct,
   formatUiDateTime,
-} from "../core.js?v=11";
+} from "../core.js?v=14";
 import {
   nextPremiumSort,
   nextToggleSort,
@@ -14,7 +14,7 @@ import {
   pickBestPremiumXi,
   premiumPlayerScore,
   premiumSelectionCounts,
-} from "../premium-formations.js?v=4";
+} from "../premium-formations.js?v=5";
 
 let premiumData = null;
 let premiumSort = null;
@@ -689,6 +689,36 @@ function syncAuctionRefreshButton() {
   button.disabled = !selectedPremiumTeamId();
 }
 
+async function loadPremiumOdds() {
+  const button = document.getElementById("premium-refresh-odds");
+  const meta = document.getElementById("premium-meta");
+  if (button) {
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+  }
+  if (meta) meta.textContent = "Подгружаю матчи и коэффициенты…";
+  try {
+    const data = await fetchJson(
+      "/api/expected11/premium/refresh-odds",
+      { method: "POST" },
+      180000,
+    );
+    premiumData = data;
+    const liveIds = new Set(
+      (data.rows || []).map((row) => Number(row.mantraPlayerId)),
+    );
+    selectedIds = new Set([...selectedIds].filter((id) => liveIds.has(id)));
+    decoratePremiumScores(data.rows);
+    fillFilters(data);
+    applyBestXi();
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.removeAttribute("aria-busy");
+    }
+  }
+}
+
 async function loadPremium(refresh) {
   const refreshButton = document.getElementById("premium-refresh");
   if (refreshButton) refreshButton.disabled = true;
@@ -762,6 +792,11 @@ document.getElementById("view-premium")?.addEventListener("change", (event) => {
 document.getElementById("premium-generate")?.addEventListener("click", applyBestXi);
 document.getElementById("premium-refresh")?.addEventListener("click", () => {
   loadPremium(true).catch((error) => {
+    document.getElementById("premium-meta").textContent = `Ошибка: ${error.message}`;
+  });
+});
+document.getElementById("premium-refresh-odds")?.addEventListener("click", () => {
+  loadPremiumOdds().catch((error) => {
     document.getElementById("premium-meta").textContent = `Ошибка: ${error.message}`;
   });
 });

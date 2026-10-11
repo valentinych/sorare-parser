@@ -77,7 +77,7 @@ test("standalone live-draft page does not boot the main SPA", async () => {
   ]);
   assert.doesNotMatch(page, /app\.js/);
   assert.doesNotMatch(page, /auctions-view\.js/);
-  assert.match(page, /live-draft\.js\?v=17/);
+  assert.match(page, /live-draft\.js\?v=20/);
   assert.match(page, /live-draft\.css\?v=14/);
   assert.match(page, /id="live-draft-stop"/);
   assert.match(page, /id="live-draft-board"/);
@@ -120,7 +120,7 @@ test("standalone live-draft page does not boot the main SPA", async () => {
   assert.match(script, /liveDraftLotOpen/);
   assert.match(script, /nudgeBid/);
   assert.match(script, /leader_cannot_fold|youAreLeader/);
-  assert.match(script, /i18n\.js\?v=33/);
+  assert.match(script, /i18n\.js\?v=36/);
   assert.match(script, /live-draft-view\.js\?v=12/);
   assert.match(script, /managerSquadId/);
   assert.match(script, /managerPresence/);
@@ -152,11 +152,11 @@ test("live draft assets are cache-busted", async () => {
     readFile(new URL("../../public-tm/app.js", import.meta.url), "utf8"),
     readFile(new URL("../../public-tm/live-draft.html", import.meta.url), "utf8"),
   ]);
-  assert.match(html, /boot\.js\?v=19/);
-  assert.match(html, /styles\.css\?v=129/);
-  assert.match(app, /i18n\.js\?v=24/);
+  assert.match(html, /boot\.js\?v=85/);
+  assert.match(html, /styles\.css\?v=166/);
+  assert.match(app, /i18n\.js\?v=36/);
   assert.match(app, /live-draft-access\.js\?v=1/);
-  assert.match(page, /live-draft\.js\?v=17/);
+  assert.match(page, /live-draft\.js\?v=20/);
   assert.match(page, /live-draft\.css\?v=14/);
 });
 
@@ -312,7 +312,7 @@ test("GET /live-draft serves the standalone HTML without app.js", async (t) => {
   assert.equal(response.statusCode, 200);
   assert.match(response.headers["content-type"] || "", /text\/html/);
   assert.doesNotMatch(response.body, /app\.js/);
-  assert.match(response.body, /live-draft\.js\?v=17/);
+  assert.match(response.body, /live-draft\.js\?v=20/);
   assert.match(response.body, /id="live-draft-stop"/);
   assert.match(response.body, /id="live-draft-managers"/);
   assert.match(response.body, /id="live-draft-all-squads"/);

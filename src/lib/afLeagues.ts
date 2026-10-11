@@ -144,7 +144,7 @@ export const UI_LEAGUE_SLUGS = [
 
 export type UiLeagueSlug = (typeof UI_LEAGUE_SLUGS)[number];
 
-/** Extra championships on Premium only (not header UI, not Live poller). */
+/** Extra championships on Premium (not header UI, not /tables). Live includes them. */
 export const PREMIUM_EXTRA_SLUGS = ["league-one"] as const;
 
 export type PremiumLeagueSlug = UiLeagueSlug | (typeof PREMIUM_EXTRA_SLUGS)[number];

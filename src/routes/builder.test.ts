@@ -86,7 +86,7 @@ test("Builder picker uses /builder/leagues and skips TM crawl on load", async ()
   assert.match(appJs, /syncBuilderHash\(\)/);
   assert.match(appJs, /function builderPublicImage/);
   assert.match(appJs, /builderPublicImage\(player\.avatarPath\)/);
-  assert.match(boot, /builder: "\.\/app\.js\?v=148"/);
+  assert.match(boot, /builder: "\.\/app\.js\?v=151"/);
   assert.match(appJs, /id="builder-refresh-auctions"|builder-refresh-auctions/);
   assert.match(appJs, /\/api\/expected11\/premium\/refresh-auctions/);
   assert.match(appJs, /accountState\.entitlements\?\.expected11Admin/);

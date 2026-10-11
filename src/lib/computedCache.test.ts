@@ -237,6 +237,61 @@ test("enqueue disabled does not schedule stale Ideal rebuilds (web peeks only)",
   assert.equal(queued.length, 0);
 });
 
+test("same version with a newer sqlite built_at replaces memory", () => {
+  const db = database();
+  getComputed("premium:odds-join", "v1", () => ({ fixtures: [] as number[] }), {
+    database: db,
+  });
+  db.prepare(
+    `UPDATE computed_cache SET body_json = ?, built_at = ? WHERE key = ?`,
+  ).run(
+    JSON.stringify({ fixtures: [1] }),
+    "2099-01-01T00:00:00.000Z",
+    "premium:odds-join",
+  );
+  let computes = 0;
+  const hit = getComputed(
+    "premium:odds-join",
+    "v1",
+    () => {
+      computes += 1;
+      return { fixtures: [99] };
+    },
+    { database: db, blockOnMiss: false },
+  );
+  assert.equal(computes, 0);
+  assert.equal(hit.status, "hit");
+  assert.deepEqual(hit.value, { fixtures: [1] });
+  assert.deepEqual(peekComputed("premium:odds-join"), { fixtures: [1] });
+});
+
+test("same version with an older sqlite built_at keeps memory", () => {
+  const db = database();
+  getComputed("premium:odds-join", "v1", () => ({ fixtures: [7] }), {
+    database: db,
+  });
+  db.prepare(
+    `UPDATE computed_cache SET body_json = ?, built_at = ? WHERE key = ?`,
+  ).run(
+    JSON.stringify({ fixtures: [1] }),
+    "2000-01-01T00:00:00.000Z",
+    "premium:odds-join",
+  );
+  let computes = 0;
+  const hit = getComputed(
+    "premium:odds-join",
+    "v1",
+    () => {
+      computes += 1;
+      return { fixtures: [99] };
+    },
+    { database: db, blockOnMiss: false },
+  );
+  assert.equal(computes, 0);
+  assert.equal(hit.status, "hit");
+  assert.deepEqual(hit.value, { fixtures: [7] });
+});
+
 test("enqueue disabled reloads SQLite when compute worker writes a newer version", () => {
   const db = database();
   getComputed("mantra-scores:premier-league:2", "v1", () => ({ total: 10 }), {

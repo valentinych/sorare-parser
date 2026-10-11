@@ -637,11 +637,12 @@ export function computeAllMantraMatches(
   league?: string | null,
 ): ComputedMantraMatch[] {
   const def = resolveLiveLeague(league);
-  const file = loadMantraLineups(round, def.slug);
+  const clubRound = resolveScoringClubRound(def.slug, round);
+  const file = loadMantraLineups(round ?? clubRound, def.slug);
   if (!file) return [];
-  const index = loadFotmobIndex(round, def.slug);
+  const index = loadFotmobIndex(clubRound, def.slug);
   const eventsByMatch = eventsForIndex(index);
-  const matchPhases = loadClubMatchPhases(round, def.slug);
+  const matchPhases = loadClubMatchPhases(clubRound, def.slug);
   const fotmobIds = loadMantraFotmobIds(def.mantraTournamentId!);
   const out: ComputedMantraMatch[] = [];
   for (const [id, match] of Object.entries(file.matches)) {
@@ -664,11 +665,12 @@ export async function computeAllMantraMatchesAsync(
   league?: string | null,
 ): Promise<ComputedMantraMatch[]> {
   const def = resolveLiveLeague(league);
-  const file = loadMantraLineups(round, def.slug);
+  const clubRound = resolveScoringClubRound(def.slug, round);
+  const file = loadMantraLineups(round ?? clubRound, def.slug);
   if (!file) return [];
-  const index = loadFotmobIndex(round, def.slug);
+  const index = loadFotmobIndex(clubRound, def.slug);
   const eventsByMatch = eventsForIndex(index);
-  const matchPhases = loadClubMatchPhases(round, def.slug);
+  const matchPhases = loadClubMatchPhases(clubRound, def.slug);
   const fotmobIds = loadMantraFotmobIds(def.mantraTournamentId!);
   const out: ComputedMantraMatch[] = [];
   let i = 0;
@@ -689,6 +691,60 @@ export function invalidateMantraLiveScoreCache(): void {
 
 function scoreCacheKey(slug: string, round: string): string {
   return `mantra-scores:${slug}:${round}`;
+}
+
+/**
+ * Mantra tour numbers are not always FotMob gameweeks. League One's open tour is
+ * 2 while the clubs are in gameweek 10. Scoring that XI against FotMob round 2
+ * marks everyone FT with August points. Keep the current lineup file on the
+ * FotMob gameweek from sync_meta even after that gameweek finishes. A requested
+ * round that is not the current lineup file is a historical archive and stays.
+ */
+export function scoringClubRound(input: {
+  requested: string | null;
+  liveRound: string | null;
+  requestedInPlay: boolean;
+  liveInPlay: boolean;
+  currentLineupRound: string | null;
+}): string | null {
+  const { requested, liveRound, currentLineupRound } = input;
+  if (!requested) return liveRound;
+  if (!liveRound || requested === liveRound) return requested;
+  if (currentLineupRound != null && currentLineupRound === requested) return liveRound;
+  return requested;
+}
+
+function fotmobLiveRound(slug: string): string | null {
+  const def = resolveLiveLeague(slug);
+  const row = getDb()
+    .prepare(`SELECT value FROM sync_meta WHERE key = ?`)
+    .get(liveRoundMetaKey(def.slug)) as { value: string } | undefined;
+  const stored = row?.value?.trim();
+  return stored || null;
+}
+
+function fotmobRoundInPlay(fotmobLeagueId: number, round: string): boolean {
+  const row = getDb()
+    .prepare(
+      `SELECT COUNT(*) AS n FROM fotmob_matches
+       WHERE league_id = ? AND round = ? AND phase IN ('live', 'upcoming')`,
+    )
+    .get(fotmobLeagueId, round) as { n: number };
+  return row.n > 0;
+}
+
+function resolveScoringClubRound(slug: string, requested?: string | null): string | null {
+  const def = resolveLiveLeague(slug);
+  const liveRound = fotmobLiveRound(def.slug);
+  const want = requested != null && requested !== "" ? String(requested) : null;
+  const file = loadMantraLineups(null, def.slug);
+  return scoringClubRound({
+    requested: want,
+    liveRound,
+    requestedInPlay: want != null && fotmobRoundInPlay(def.fotmobLeagueId, want),
+    liveInPlay: liveRound != null && fotmobRoundInPlay(def.fotmobLeagueId, liveRound),
+    currentLineupRound: file?.round != null ? String(file.round) : null,
+  });
 }
 
 function computeMantraMatchMapUncached(
@@ -717,7 +773,8 @@ export function computeMantraMatchMap(
   options?: { blockOnMiss?: boolean },
 ): Record<string, ComputedMantraMatch> {
   const slug = resolveLiveLeague(league).slug;
-  const r = round != null && round !== "" ? String(round) : "_";
+  const clubRound = resolveScoringClubRound(slug, round);
+  const r = clubRound != null && clubRound !== "" ? clubRound : "_";
   const blockOnMiss = options?.blockOnMiss;
   return (
     getComputed(
@@ -745,7 +802,8 @@ export function computeMantraMatch(
   league?: string | null,
 ): ComputedMantraMatch | null {
   const def = resolveLiveLeague(league);
-  const r = round != null && round !== "" ? String(round) : "_";
+  const clubRound = resolveScoringClubRound(def.slug, round);
+  const r = clubRound != null && clubRound !== "" ? clubRound : "_";
   const key = scoreCacheKey(def.slug, r);
   const cachedMap =
     peekComputed<Record<string, ComputedMantraMatch>>(key) ??
@@ -756,12 +814,12 @@ export function computeMantraMatch(
   // Enqueue full-map rebuild; never compute every match on the click path.
   computeMantraMatchMap(round, league, { blockOnMiss: false });
 
-  const file = loadMantraLineups(round, def.slug);
+  const file = loadMantraLineups(round ?? clubRound, def.slug);
   const match = file?.matches?.[String(matchId)];
   if (!match) return null;
-  const index = loadFotmobIndex(round, def.slug);
+  const index = loadFotmobIndex(clubRound, def.slug);
   const eventsByMatch = eventsForIndex(index);
-  const matchPhases = loadClubMatchPhases(round, def.slug);
+  const matchPhases = loadClubMatchPhases(clubRound, def.slug);
   const fotmobIds = loadMantraFotmobIds(def.mantraTournamentId!);
   return {
     matchId,

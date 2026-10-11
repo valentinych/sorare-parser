@@ -131,7 +131,7 @@ function mergePlayers(players: FootmopsPlayer[]): FootmopsPlayer[] {
     const current = byKey.get(key);
     if (
       !current ||
-      GROUP_RANK[group] < GROUP_RANK[current.group] ||
+      GROUP_RANK[group] > GROUP_RANK[current.group] ||
       (group === current.group &&
         (percentage ?? -1) > (current.percentage ?? -1))
     ) {
@@ -296,7 +296,7 @@ export function footmopsByPlayer(
       if (row.tour < current.tour) continue;
       if (
         row.tour === current.tour &&
-        (GROUP_RANK[current.lineupGroup] < GROUP_RANK[row.lineupGroup] ||
+        (GROUP_RANK[current.lineupGroup] > GROUP_RANK[row.lineupGroup] ||
           (current.lineupGroup === row.lineupGroup &&
             (current.displayedPercentage ?? -1) >=
               (row.displayedPercentage ?? -1)))

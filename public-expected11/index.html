@@ -786,7 +786,8 @@
           <div class="notice">
             Uses the same pipeline as
             <code class="path">npm run publish:automops</code>
-            (Sorare / Expected11 / footmops + odds). Requires
+            (Sorare / Expected11 / footmops screenshots + bookmaker odds only —
+            no Starting XI text dump). Requires
             <code class="path">DRAFTMANTRA_BOT_TOKEN</code> and
             <code class="path">AUTOMOPS_CHANNEL_ID</code> in <code class="path">.env</code>.
           </div>
@@ -2090,6 +2091,18 @@
         automopsSeason = data.season;
         const prev = automopsTour.value;
         automopsTour.innerHTML = "";
+        if (!(data.tours || []).length) {
+          const opt = document.createElement("option");
+          opt.value = "";
+          opt.textContent = "No tours in local DB";
+          automopsTour.append(opt);
+          setAutomopsStatus(
+            "Error",
+            `No fixtures for this league in the local database (season ${data.season}).`,
+            { err: true },
+          );
+          return;
+        }
         for (const t of data.tours || []) {
           const opt = document.createElement("option");
           opt.value = String(t.tour);

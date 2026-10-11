@@ -750,7 +750,11 @@ function fixtureStillOpen(
   return kick + STALE_NS_AFTER_MS > nowMs;
 }
 
-/** Smallest Regular Season round that still has an unfinished or upcoming fixture. */
+/**
+ * Round to show on Premium: the open round with the most fixtures still to play.
+ * A single postponed game from an earlier round must not hide the current slate.
+ * Ties keep the earlier round.
+ */
 export function nextUpcomingRound(
   database: Database.Database,
   leagueId: number,
@@ -768,11 +772,19 @@ export function nextUpcomingRound(
     status: string | null;
     date: string | null;
   }>;
-  let next: number | null = null;
+  const counts = new Map<number, number>();
   for (const row of rows) {
     const round = parseAfRoundNum(row.round);
     if (round == null || !fixtureStillOpen(row.status, row.date, nowMs)) continue;
-    if (next == null || round < next) next = round;
+    counts.set(round, (counts.get(round) ?? 0) + 1);
+  }
+  let next: number | null = null;
+  let best = 0;
+  for (const [round, count] of counts) {
+    if (next == null || count > best || (count === best && round < next)) {
+      next = round;
+      best = count;
+    }
   }
   return next;
 }
@@ -1293,7 +1305,49 @@ export function warmPremiumOddsJoin(
   database: Database.Database = getDb(),
   nowMs: number = Date.now(),
 ): void {
+  // Invalidation deletes the sqlite row from another process. This worker can
+  // still hold the old join in memory and skip the write, so the web serves
+  // an empty fixture list (no P(win) / CS).
+  const persisted = database
+    .prepare(`SELECT 1 AS ok FROM computed_cache WHERE key = ?`)
+    .get(PREMIUM_ODDS_CACHE_KEY) as { ok: number } | undefined;
+  if (!persisted) invalidateComputed(PREMIUM_ODDS_CACHE_KEY);
   getPremiumOddsJoin(database, config.predictSeason, nowMs, { blockOnMiss: true });
+}
+
+function premiumOddsJoinPersisted(database: Database.Database): boolean {
+  const row = database
+    .prepare(`SELECT 1 AS ok FROM computed_cache WHERE key = ?`)
+    .get(PREMIUM_ODDS_CACHE_KEY) as { ok: number } | undefined;
+  return row != null;
+}
+
+/** Rows exist, but none of them picked up a 1X2 win probability. */
+function premiumViewLacksWinProbabilities(
+  rows: Array<{ winProbability?: number | null }>,
+): boolean {
+  return rows.length > 0 && rows.every((row) => row.winProbability == null);
+}
+
+/**
+ * Drop in-process odds-join memory, re-read sqlite, and rebuild only when the
+ * persisted join is missing or the view still has no win probabilities.
+ * Ordinary GET must not call this — the fixture scan blocks for tens of seconds.
+ */
+export function reloadPremiumOddsJoin(
+  actor: Actor,
+  database: Database.Database = getDb(),
+  now: Date = new Date(),
+): ReturnType<typeof getExpected11PremiumView> {
+  invalidateComputed(PREMIUM_ODDS_CACHE_KEY);
+  const persisted = premiumOddsJoinPersisted(database);
+  let view = getExpected11PremiumView({ now }, actor, database);
+  if (!persisted || premiumViewLacksWinProbabilities(view.rows)) {
+    invalidateComputed(PREMIUM_ODDS_CACHE_KEY, { database, persist: true });
+    warmPremiumOddsJoin(database, now.getTime());
+    view = getExpected11PremiumView({ now }, actor, database);
+  }
+  return view;
 }
 
 export function getExpected11PremiumView(

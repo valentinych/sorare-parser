@@ -4,7 +4,7 @@ import {
   esc,
   formatUiDateTime,
   tr,
-} from "../core.js?v=11";
+} from "../core.js?v=14";
 import { nextToggleSort } from "../premium-sort.js?v=5";
 
 /** MantraFootball position colours (same as Live / Squad Builder). */
@@ -120,7 +120,7 @@ function extraTitle(stats) {
   if (stats.apps) bits.push(`${tr("Игры")}: ${stats.apps}${stats.st ? ` (${tr("старт")} ${stats.st})` : ""}`);
   if (stats.og) bits.push(`${tr("Автоголы")}: ${stats.og}`);
   if (stats.sv) bits.push(`${tr("Сейвы")}: ${stats.sv}`);
-  if (stats.gc) bits.push(`${tr("Пропущено")}: ${stats.gc}`);
+  if (stats.gc) bits.push(`${tr("Пропущенные голы")}: ${stats.gc}`);
   if (stats.psc) bits.push(`${tr("Пенальти")}: ${stats.psc}`);
   if (stats.pmi) bits.push(`${tr("Незабитые пенальти")}: ${stats.pmi}`);
   if (stats.psv) bits.push(`${tr("Отбитые пенальти")}: ${stats.psv}`);

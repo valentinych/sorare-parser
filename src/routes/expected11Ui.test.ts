@@ -210,8 +210,8 @@ test("League One and Mantra Doma are public tabs with anonymous GETs", async () 
   assert.doesNotMatch(mantraDomaPage, /playerCell/);
   assert.match(mantraDomaPage, /\/api\/mantra-doma\/stats/);
   assert.match(html, /id="mantra-doma-photo-dialog"/);
-  assert.match(boot, /"league-one": "\.\/pages\/league-one\.js\?v=14"/);
-  assert.match(boot, /"mantra-doma": "\.\/pages\/mantra-doma\.js\?v=9"/);
+  assert.match(boot, /"league-one": "\.\/pages\/league-one\.js\?v=17"/);
+  assert.match(boot, /"mantra-doma": "\.\/pages\/mantra-doma\.js\?v=12"/);
   assert.match(mantraDomaPage, /mantra-doma-table/);
   assert.match(mantraDomaPage, /nextToggleSort/);
   assert.match(mantraDomaPage, /data-doma-sort/);
@@ -254,7 +254,7 @@ test("mapping page filters loaded rows by championship without refetching", asyn
     page,
     /applyLinkedMapping[\s\S]{0,400}loadMapping\(\)/,
   );
-  assert.match(boot, /expected11\.js\?v=14/);
+  assert.match(boot, /expected11\.js\?v=17/);
 });
 
 test("Sorare championship dropdown reads and writes ?league= slugs", async () => {
@@ -274,7 +274,7 @@ test("Sorare championship dropdown reads and writes ?league= slugs", async () =>
   assert.match(page, /qs\.get\("league"\)/);
   assert.match(page, /qs\.get\("tour"\) \|\| qs\.get\("round"\)/);
   assert.match(page, /renderExpected11Gazette\(data\)/);
-  assert.match(boot, /sorare: "\.\/pages\/expected11\.js\?v=14"/);
+  assert.match(boot, /sorare: "\.\/pages\/expected11\.js\?v=17"/);
 });
 
 test("Expected11 URL ingest form is admin-only and not in anonymous HTML", async () => {
@@ -495,12 +495,15 @@ test("Premium sort controls expose direction and load cache-busted assets", asyn
   assert.match(html, /data-premium-sort="cleanSheetProbability"/);
   assert.match(html, /data-premium-sort="opponentCleanSheetProbability"/);
   assert.match(html, /aria-sort="none"/);
-  assert.match(html, /boot\.js\?v=77/);
+  assert.match(html, /boot\.js\?v=85/);
   assert.match(html, /Обновить состав моей команды/);
+  assert.match(html, /id="premium-refresh-odds"/);
+  assert.match(html, /Подгрузить матчи и коэффициенты/);
+  assert.doesNotMatch(html, /id="premium-refresh-odds"[^>]*\bhidden\b/);
   assert.match(html, /id="premium-refresh-auctions"/);
   assert.match(html, /Обновить после раундов аукциона/);
   assert.match(html, /id="premium-refresh-auctions"[\s\S]*?\bhidden\b/);
-  assert.match(html, /styles\.css\?v=163/);
+  assert.match(html, /styles\.css\?v=166/);
   assert.match(html, /id="premium-generate"/);
   assert.match(html, /Сгенерировать состав/);
   assert.match(html, /id="premium-squad-report"/);
@@ -527,12 +530,12 @@ test("Premium sort controls expose direction and load cache-busted assets", asyn
   assert.doesNotMatch(html, /id="premium-club"/);
   assert.match(premium, /function formatXiPct/);
   assert.match(premium, /formatXiPct\(row\.displayedPercentage\)/);
-  assert.match(premium, /core\.js\?v=11/);
+  assert.match(premium, /core\.js\?v=14/);
   assert.match(premium, /premium-sort\.js\?v=5/);
   assert.match(premium, /footmopsPercentage/);
   assert.match(premium, /footmopsGroup === "out"/);
   assert.match(premium, /return "OUT"/);
-  assert.match(premium, /premium-formations\.js\?v=4/);
+  assert.match(premium, /premium-formations\.js\?v=5/);
   assert.match(premium, /Скамейка/);
   assert.match(premium, /Вне заявки/);
   assert.match(premium, /premium-row-bench/);
@@ -540,6 +543,9 @@ test("Premium sort controls expose direction and load cache-busted assets", asyn
   assert.match(premium, /premium-player-select/);
   assert.match(premium, /pickBestPremiumXi/);
   assert.match(premium, /applyBestXi/);
+  assert.match(premium, /\/api\/expected11\/premium\/refresh-odds/);
+  assert.match(premium, /Подгружаю матчи и коэффициенты/);
+  assert.match(premium, /180000/);
   assert.match(premium, /\/api\/expected11\/premium\/refresh/);
   assert.match(premium, /\/api\/expected11\/premium\/refresh-auctions/);
   assert.match(premium, /\/api\/expected11\/premium\/squad-report/);

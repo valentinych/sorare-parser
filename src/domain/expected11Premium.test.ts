@@ -7,6 +7,7 @@ import {
   getExpected11MappingView,
   getExpected11PremiumView,
   invalidatePremiumOddsJoinCache,
+  reloadPremiumOddsJoin,
   loadFotmobRatingAvgs,
   nextUpcomingRound,
   normalizedImplied1x2,
@@ -726,6 +727,23 @@ test("next upcoming round skips last week's NS leftovers and keeps this weekend"
   assert.equal(nextUpcomingRound(db, 39, 2026, now), 1);
 });
 
+test("next upcoming round prefers the full slate over one postponed earlier game", () => {
+  const db = database();
+  const fixture = db.prepare(
+    `INSERT INTO fixtures
+       (id, date, round, home_team_id, away_team_id, status, league_id, season)
+     VALUES (?, ?, ?, ?, ?, 'NS', 106, 2026)`,
+  );
+  fixture.run(1, "2026-10-12T18:30:00Z", "Regular Season - 3", 1, 2);
+  for (let id = 2; id <= 10; id += 1) {
+    fixture.run(id, "2026-10-10T15:00:00Z", "Regular Season - 10", id, id + 20);
+  }
+  assert.equal(
+    nextUpcomingRound(db, 106, 2026, Date.parse("2026-10-09T10:00:00Z")),
+    10,
+  );
+});
+
 test("Premium uses the next unfinished tour for opponent and odds, not the last played", () => {
   const db = database();
   db.prepare(
@@ -1022,6 +1040,55 @@ test("premium odds-join cache keeps Expected11 % until parse invalidates it", ()
   invalidatePremiumOddsJoinCache(db);
   const fresh = getExpected11PremiumView({ now }, actor, db);
   assert.equal(fresh.rows[0]?.displayedPercentage, 45);
+});
+
+test("refresh odds rebuilds a missing or winless join and keeps a join that already has P(win)", () => {
+  const prev = process.env.COMPUTE_ENQUEUE;
+  process.env.COMPUTE_ENQUEUE = "0";
+  try {
+    const db = database();
+    seedKrejciPremium(db);
+    db.prepare(
+      `INSERT INTO fixture_odds
+         (fixture_id, kickoff, home_odd, draw_odd, away_odd, bookmaker,
+          home_cs_prob, away_cs_prob, home_score_prob, away_score_prob, popular_score)
+       VALUES (1, '2026-08-22T14:00:00Z', 1.8, 3.4, 4.5, 'test', 0.41, 0.22, 0.7, 0.48, '1-0')`,
+    ).run();
+    const actor = { id: 1, email: "owner@example.com", mantraManagerId: 99 };
+    const now = new Date("2026-08-21T12:00:00Z");
+    writeComputed(
+      PREMIUM_ODDS_CACHE_KEY,
+      "rounds:stale|ttl:0",
+      { fixtures: [], expected11: [], rounds: [] },
+      { database: db },
+    );
+
+    const rebuilt = reloadPremiumOddsJoin(actor, db, now);
+    assert.ok((rebuilt.rows[0]?.winProbability ?? 0) > 0);
+    const cached = peekComputed(PREMIUM_ODDS_CACHE_KEY) as { fixtures?: Array<{ id: number }> };
+    assert.ok(cached?.fixtures?.some((fixture) => fixture.id === 1));
+
+    db.prepare(
+      `UPDATE computed_cache SET body_json = ?, built_at = ? WHERE key = ?`,
+    ).run(
+      JSON.stringify({
+        ...(cached as object),
+        sentinel: "keep",
+      }),
+      "2099-01-01T00:00:00.000Z",
+      PREMIUM_ODDS_CACHE_KEY,
+    );
+    const kept = reloadPremiumOddsJoin(actor, db, now);
+    assert.ok((kept.rows[0]?.winProbability ?? 0) > 0);
+    const row = db
+      .prepare(`SELECT body_json AS bodyJson, built_at AS builtAt FROM computed_cache WHERE key = ?`)
+      .get(PREMIUM_ODDS_CACHE_KEY) as { bodyJson: string; builtAt: string };
+    assert.equal(JSON.parse(row.bodyJson).sentinel, "keep");
+    assert.equal(row.builtAt, "2099-01-01T00:00:00.000Z");
+  } finally {
+    if (prev == null) delete process.env.COMPUTE_ENQUEUE;
+    else process.env.COMPUTE_ENQUEUE = prev;
+  }
 });
 
 test("web GET does not rebuild premium odds-join on cache miss", () => {

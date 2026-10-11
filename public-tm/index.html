@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Manrope:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=163" />
+    <link rel="stylesheet" href="/styles.css?v=166" />
     <script>
       (function () {
         var map = {
@@ -822,6 +822,7 @@
             <select id="premium-team"><option value="">Все команды</option></select>
           </label>
           <button type="button" class="col-picker-btn" id="premium-refresh">Обновить состав моей команды</button>
+          <button type="button" class="col-picker-btn" id="premium-refresh-odds">Подгрузить матчи и коэффициенты</button>
           <button
             type="button"
             class="col-picker-btn"
@@ -1350,6 +1351,7 @@
             </div>
           </div>
         </div>
+        <div id="live-my-teams" class="live-my-teams" hidden></div>
       </section>
 <!--/spa-view:live-->
 
@@ -1591,6 +1593,6 @@
       <div class="content-loading-spinner" aria-hidden="true"></div>
       <span class="content-loading-label">Загрузка…</span>
     </div>
-    <script src="/boot.js?v=77" type="module"></script>
+    <script src="/boot.js?v=85" type="module"></script>
   </body>
 </html>

@@ -1,20 +1,20 @@
-import { bootCore, currentPage } from "./core.js?v=11";
+import { bootCore, currentPage } from "./core.js?v=14";
 
 const PAGE_MODULES = {
-  clubs: "./app.js?v=148",
-  players: "./app.js?v=148",
-  matches: "./app.js?v=148",
-  ref: "./app.js?v=148",
-  xi: "./app.js?v=148",
-  builder: "./app.js?v=148",
-  live: "./pages/live.js?v=14",
-  auctions: "./pages/auctions.js?v=3",
-  tables: "./pages/tables.js?v=25",
-  sorare: "./pages/expected11.js?v=14",
-  mapping: "./pages/expected11.js?v=14",
-  premium: "./pages/premium.js?v=25",
-  "league-one": "./pages/league-one.js?v=14",
-  "mantra-doma": "./pages/mantra-doma.js?v=9",
+  clubs: "./app.js?v=151",
+  players: "./app.js?v=151",
+  matches: "./app.js?v=151",
+  ref: "./app.js?v=151",
+  xi: "./app.js?v=151",
+  builder: "./app.js?v=151",
+  live: "./pages/live.js?v=21",
+  auctions: "./pages/auctions.js?v=6",
+  tables: "./pages/tables.js?v=28",
+  sorare: "./pages/expected11.js?v=17",
+  mapping: "./pages/expected11.js?v=17",
+  premium: "./pages/premium.js?v=29",
+  "league-one": "./pages/league-one.js?v=17",
+  "mantra-doma": "./pages/mantra-doma.js?v=12",
 };
 
 const CORE_PAGES = new Set(["live", "auctions", "tables", "sorare", "mapping", "premium", "league-one", "mantra-doma"]);

@@ -15,7 +15,7 @@ import {
   setActiveCompetitionId,
   slugifyLeagueName,
   tr,
-} from "../core.js?v=11";
+} from "../core.js?v=14";
 import {
   expected11AggregateText,
   expected11NarrativeBlocks,

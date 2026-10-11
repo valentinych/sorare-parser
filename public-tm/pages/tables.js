@@ -6,7 +6,7 @@ import {
   pageHooks,
   tr,
   withContentLoading,
-} from "../core.js?v=11";
+} from "../core.js?v=14";
 import { nextToggleSort } from "../premium-sort.js?v=5";
 
 const LEAGUE_SLUGS = [

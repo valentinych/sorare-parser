@@ -271,6 +271,99 @@ test("Premium XI score weights ratings against XI% and slot CS", async () => {
   assert.equal(premiumXiProb({ ...starter, lineupGroup: "out" }), 0);
 });
 
+test("League One score ignores missing lineup % and ranks ratings plus odds", async () => {
+  const {
+    PREMIUM_XI_WEIGHTS: weights,
+    pickBestPremiumXi,
+    premiumPlayerScore,
+    premiumXiProb,
+  } = await import(helperPath);
+  const formations = ALL_FORMATIONS.map(formation);
+  const base = {
+    positions: ["ST"],
+    matchLabel: "Д vs Exeter",
+    displayedPercentage: null,
+    footmopsPercentage: null,
+    footmopsGroup: null,
+    winProbability: 0.4,
+    cleanSheetProbability: 0.2,
+    opponentCleanSheetProbability: 0.3,
+    teamScoreProbability: 0.55,
+  };
+  const strong = {
+    ...base,
+    seasonAvgRating: 8,
+    last5AvgRating: 7.5,
+  };
+  const weak = {
+    ...base,
+    seasonAvgRating: 6,
+    last5AvgRating: 6,
+  };
+  const strongScore = premiumPlayerScore(strong);
+  const expected =
+    weights.season * 0.8 +
+    weights.form * 0.75 +
+    weights.win * 0.4 +
+    weights.cs * 0.2 * 0 +
+    weights.goals * 0.55 * 1;
+  assert.equal(premiumXiProb(strong), null);
+  assert.equal(strongScore.xiProb, null);
+  assert.equal(strongScore.total, Number(expected.toFixed(2)));
+  assert.doesNotMatch(strongScore.title, /XI /);
+  assert.ok(strongScore.total > premiumPlayerScore(weak).total);
+
+  const betterOdds = premiumPlayerScore({ ...weak, winProbability: 0.85 });
+  const worseOdds = premiumPlayerScore({ ...weak, winProbability: 0.2 });
+  assert.ok(betterOdds.total > worseOdds.total);
+
+  const noOdds = premiumPlayerScore({
+    ...strong,
+    winProbability: null,
+    cleanSheetProbability: null,
+    opponentCleanSheetProbability: null,
+    teamScoreProbability: null,
+  });
+  const ratingOnly = weights.season * 0.8 + weights.form * 0.75;
+  assert.equal(noOdds.total, Number(ratingOnly.toFixed(2)));
+  assert.ok(noOdds.total > 1);
+  assert.doesNotMatch(noOdds.title, /win /);
+  assert.doesNotMatch(noOdds.title, /гол /);
+
+  assert.equal(premiumXiProb({ ...strong, footmopsGroup: "out" }), 0);
+  assert.equal(premiumPlayerScore({ ...strong, footmopsGroup: "out" }).xiProb, 0);
+  const withFootmops = premiumPlayerScore({ ...weak, footmopsPercentage: 80 });
+  assert.equal(withFootmops.xiProb, 0.8);
+  assert.ok(withFootmops.total > premiumPlayerScore(weak).total);
+
+  const squad = valid433().map((item) => ({
+    ...item,
+    seasonAvgRating: 6.5,
+    last5AvgRating: 6.5,
+    displayedPercentage: null,
+    footmopsPercentage: null,
+    footmopsGroup: null,
+    matchLabel: "Д vs Exeter",
+    winProbability: 0.45,
+    teamScoreProbability: 0.5,
+  }));
+  const hotSt = {
+    ...squad.find((item) => item.mantraPlayerId === 11),
+    mantraPlayerId: 12,
+    displayName: "Hot Striker",
+    surname: "Hot",
+    seasonAvgRating: 8.4,
+    last5AvgRating: 8.2,
+  };
+  const picked = pickBestPremiumXi([...squad, hotSt], formations, ALL_POSITIONS);
+  assert.equal(picked.error, null);
+  const starterIds = (picked.best?.assignments || []).map(
+    (item) => item.player.mantraPlayerId,
+  );
+  assert.ok(starterIds.includes(12));
+  assert.equal(starterIds.includes(11), false);
+});
+
 test("Premium XI picker maximizes score under Mantra slots and skips no-fixture", async () => {
   const { pickBestPremiumXi } = await import(helperPath);
   const formations = ALL_FORMATIONS.map(formation);
